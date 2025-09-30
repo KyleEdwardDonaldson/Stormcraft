@@ -1,0 +1,13 @@
+FROM maven:3.9.11-eclipse-temurin-17 AS build
+
+WORKDIR /build
+COPY pom.xml .
+
+# Download dependencies first (for better caching)
+RUN mvn dependency:go-offline -B || true
+
+COPY src ./src
+
+RUN mvn clean package -DskipTests -B
+
+# Output is in /build/target/stormcraft-0.1.0.jar

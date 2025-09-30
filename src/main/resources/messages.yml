@@ -1,0 +1,11 @@
+prefix: "<dark_gray>[<yellow>Stormcraft</yellow>]</dark_gray> "
+countdown: "<yellow>⚠</yellow> <gold>Storm Warning:</gold> <white>{time}</white> until arrival — Type: <aqua>{type}</aqua> (<gold>{dps} HP/s</gold>)"
+grace: "<red>⛈ STORM INCOMING</red> <white>{time}</white> — <yellow>Seek shelter now!</yellow>"
+landfall: "<red><bold>⚡ STORM ACTIVE!</bold></red> <gold>{dps} HP/s</gold> for <white>{duration}</white> — <gray>Stay indoors!</gray>"
+tickWarn: "<gray>You feel the air crackle…</gray>"
+cleared: "<green>✓ Storm cleared.</green> Next storm in <white>{next}</white>."
+
+status:
+  idle: "Next storm in {next}."
+  countdown: "Storm in {time} — {type} — {dps} HP/s"
+  active: "Storm active: {type} — {time} left — {dps} HP/s"

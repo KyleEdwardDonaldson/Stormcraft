@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  minecraft:
+    image: itzg/minecraft-server
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      TYPE: "PAPER"
+      VERSION: "1.21.1"
+      MEMORY: "2G"
+      OVERRIDE_SERVER_PROPERTIES: "true"
+      DIFFICULTY: "normal"
+      MODE: "survival"
+      ENABLE_COMMAND_BLOCK: "true"
+      OPS: "YourMinecraftUsername"
+    volumes:
+      - ./target/stormcraft-0.1.0.jar:/plugins/stormcraft-0.1.0.jar:ro
+      - minecraft-data:/data
+    stdin_open: true
+    tty: true
+
+volumes:
+  minecraft-data:

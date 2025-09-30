@@ -1,0 +1,65 @@
+name: Stormcraft
+main: dev.ked.stormcraft.StormcraftPlugin
+version: 0.1.0
+api-version: "1.21"
+author: Kyle Donaldson
+website: https://ked.dev
+description: >
+  Dangerous, configurable storms with countdowns and exposure damage.
+  Randomized storm types (short/weak, medium, long/dangerous) with weights.
+
+load: POSTWORLD
+
+softdepend:
+  - PlaceholderAPI
+  - WorldGuard
+  - Vault
+  - Dynmap
+
+commands:
+  stormcraft:
+    description: Stormcraft status and admin controls
+    usage: "/stormcraft [start|stop|next|reload|testdamage|weights]"
+    aliases: [sc]
+    permission: stormcraft.view
+    permission-message: "&cYou don't have permission."
+  storm:
+    description: Check storm status
+    usage: "/storm"
+    permission: stormcraft.view
+    permission-message: "&cYou don't have permission."
+
+permissions:
+  stormcraft.view:
+    description: See storm announcements and status
+    default: true
+
+  stormcraft.admin:
+    description: All admin abilities for Stormcraft
+    default: op
+    children:
+      stormcraft.admin.start: true
+      stormcraft.admin.stop: true
+      stormcraft.admin.next: true
+      stormcraft.admin.reload: true
+      stormcraft.admin.test: true
+
+  stormcraft.admin.start:
+    description: Force start storms
+    default: op
+
+  stormcraft.admin.stop:
+    description: Stop active storms
+    default: op
+
+  stormcraft.admin.next:
+    description: Set or force the next storm timer
+    default: op
+
+  stormcraft.admin.reload:
+    description: Reload configuration
+    default: op
+
+  stormcraft.admin.test:
+    description: Run damage/exposure test on self
+    default: op

@@ -1,0 +1,143 @@
+version: 1
+
+enabledWorlds:
+  - world
+
+minDelayBetweenStormsSeconds: 900
+maxDelayBetweenStormsSeconds: 2400
+
+countdownDurationSeconds: 900
+countdownAnnounceScheduleSeconds: [900, 600, 420, 300, 120, 60, 10]
+gracePeriodSeconds: 180
+
+stormWeights:
+  shortWeak: 0.20
+  medium: 0.65
+  longDangerous: 0.15
+
+damageProfiles:
+  shortWeak:
+    minDurationSeconds: 600
+    maxDurationSeconds: 1800
+    minDamagePerSecond: 0.04
+    maxDamagePerSecond: 0.1
+    extraEffects:
+      blindness: false
+      slownessAmplifier: -1
+      lightningStrikeChance: 0.02
+  medium:
+    minDurationSeconds: 300
+    maxDurationSeconds: 1200
+    minDamagePerSecond: 0.2
+    maxDamagePerSecond: 0.5
+    extraEffects:
+      blindness: true
+      slownessAmplifier: 0
+      lightningStrikeChance: 0.08
+  longDangerous:
+    minDurationSeconds: 180
+    maxDurationSeconds: 1200
+    minDamagePerSecond: 1.0
+    maxDamagePerSecond: 3.0
+    extraEffects:
+      blindness: true
+      slownessAmplifier: 2
+      lightningStrikeChance: 0.25
+
+exposure:
+  checkIntervalTicks: 20
+  treatLeavesAsCover: true
+  treatGlassAsCover: true
+  ignoreGameModes:
+    - CREATIVE
+    - SPECTATOR
+  ignoreIfUnderBlocksMinDepth: 1
+  protectedRegionsHook:
+    worldGuard: true
+
+economy:
+  enabled: true
+  essencePerTick: 0.1
+  essenceMultipliers:
+    shortWeak: 1.0
+    medium: 2.0
+    longDangerous: 4.0
+
+# Zone System - Creates Stormlands (dangerous center) and Safe Zones (outer edges)
+zones:
+  enabled: false  # Set to true to enable zone system
+  centerX: 0  # Center of zone system (X coordinate)
+  centerZ: 0  # Center of zone system (Z coordinate)
+
+  # Stormlands - High risk, high reward center zone
+  stormlands:
+    radius: 2500  # Blocks from center
+    stormFrequencyMultiplier: 3.0  # 3x more storms
+    essenceMultiplier: 3.0  # 3x essence rewards
+    resourceMultiplier: 2.5  # 2.5x resource spawns
+    blockDamageEnabled: true  # Buildings degrade during storms
+    blockDamageChance: 0.015  # 1.5% chance per check
+    stormDropsEnabled: true  # Valuable items spawn during storms
+    stormDropChance: 0.1  # 10% chance per tick
+    stormTypeWeights:  # Mostly dangerous storms
+      shortWeak: 0.20
+      medium: 0.30
+      longDangerous: 0.50
+
+  # Storm Zone - Moderate risk/reward middle ring
+  stormZone:
+    radius: 5000  # Blocks from center
+    stormFrequencyMultiplier: 1.5  # 1.5x more storms
+    essenceMultiplier: 1.5  # 1.5x essence rewards
+    resourceMultiplier: 1.5  # 1.5x resource spawns
+    blockDamageEnabled: false  # No block damage here
+    stormDropsEnabled: true
+    stormDropChance: 0.05  # 5% chance per tick
+    stormTypeWeights:
+      shortWeak: 0.40
+      medium: 0.40
+      longDangerous: 0.20
+
+  # Safe Zone - Low risk outer region
+  safeZone:
+    radius: 10000  # Blocks from center (anything beyond storm zone)
+    stormFrequencyMultiplier: 0.3  # 30% storm frequency
+    essenceMultiplier: 1.0  # Normal essence
+    resourceMultiplier: 1.0  # Normal resources
+    blockDamageEnabled: false
+    stormDropsEnabled: false  # No storm drops
+    stormTypeWeights:
+      shortWeak: 0.70
+      medium: 0.25
+      longDangerous: 0.05
+
+# Traveling Storm System - Storms move across the map toward Stormlands
+travelingStorms:
+  enabled: false  # Set to true for storms that move (requires zones enabled)
+  movementSpeed: 5.0  # Blocks per second storm moves
+  damageRadius: 50.0  # Radius in blocks where storm damages players
+
+# Block Damage - Buildings degrade during storms in Stormlands
+blockDamage:
+  enabled: true  # Only affects Stormlands if zone system enabled
+  baseChance: 0.01  # 1% base chance per check (multiplied by material type)
+  maxChecksPerTick: 50  # Max blocks to check per tick (performance limit)
+
+# Storm Drops - Valuable items spawn during storms
+stormDrops:
+  enabled: true
+  chanceStormlands: 0.1  # 10% chance per check in Stormlands
+  chanceStormZone: 0.05  # 5% chance per check in Storm Zone
+  checkIntervalTicks: 100  # Check every 5 seconds
+
+# Ore Generation - Passive ore spawning in Stormlands/Storm Zone
+oreGeneration:
+  enabled: true
+  baseChance: 0.001  # 0.1% chance per block check
+  chunksPerTick: 2  # Chunks to check per tick
+  attemptsPerChunk: 3  # Block checks per chunk
+
+debug:
+  logExposureSamples: false
+  logScheduling: false
+  bStats: true
