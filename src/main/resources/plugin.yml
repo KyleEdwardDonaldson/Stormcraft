@@ -8,7 +8,7 @@ description: >
   Dangerous, configurable storms with countdowns and exposure damage.
   Randomized storm types (short/weak, medium, long/dangerous) with weights.
 
-load: POSTWORLD
+load: STARTUP
 
 # Custom world generator - use with: /mv create <world> normal -g Stormcraft
 generator: StormcraftWorldGenerator
@@ -17,9 +17,7 @@ softdepend:
   - PlaceholderAPI
   - WorldGuard
   - Vault
-  - Dynmap
   - squaremap
-  - BlueMap
 
 commands:
   stormcraft:

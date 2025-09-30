@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## VPS Environment Context
+
+This repository lives on the **Stormcraft production VPS** that hosts the live Minecraft server. The server runs under **Pterodactyl** panel management.
+
+### Build & Deployment Workflow
+
+When building the plugin JAR, **always build directly into the Pterodactyl plugins directory**:
+
+```
+/var/lib/pterodactyl/volumes/31a2482a-dbb7-4d21-8126-bde346cb17db/plugins/
+```
+
+**Maven build command:**
+```bash
+mvn clean package && cp target/Stormcraft-*.jar /var/lib/pterodactyl/volumes/31a2482a-dbb7-4d21-8126-bde346cb17db/plugins/
+```
+
+After building, restart the Minecraft server via Pterodactyl panel or console command to load the new version.
+
+### Important Notes
+- This is a **production environment** - test thoroughly before building
+- The Pterodactyl volume path is the live server's plugin directory
+- Configuration files (config.yml, messages.yml) persist in the plugins/Stormcraft/ subdirectory
+- Server logs are accessible via Pterodactyl console
+
 ## Project Overview
 
 **Stormcraft** is a Paper Minecraft plugin (1.21.x, Java 17+) that adds dangerous, configurable storms with countdown warnings and exposure-based damage. Players must seek shelter or take periodic damage while exposed to open sky during storms.

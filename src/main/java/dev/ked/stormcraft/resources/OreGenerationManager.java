@@ -107,20 +107,38 @@ public class OreGenerationManager extends BukkitRunnable {
 
     /**
      * Gets a random chunk within the Stormlands or Storm Zone.
+     * Only returns chunks that are already loaded to avoid blocking the main thread.
      */
     private Chunk getRandomChunkInZone(World world) {
+        // Get all loaded chunks in the world
+        Chunk[] loadedChunks = world.getLoadedChunks();
+        if (loadedChunks.length == 0) {
+            return null;
+        }
+
         double centerX = zoneManager.getCenterX();
         double centerZ = zoneManager.getCenterZ();
         double maxRadius = zoneManager.getStormZoneRadius();
 
-        // Random angle and distance within max radius
-        double angle = random.nextDouble() * 2 * Math.PI;
-        double distance = random.nextDouble() * maxRadius;
+        // Try to find a loaded chunk within the zone (max 10 attempts)
+        for (int attempt = 0; attempt < 10; attempt++) {
+            Chunk chunk = loadedChunks[random.nextInt(loadedChunks.length)];
 
-        double x = centerX + (Math.cos(angle) * distance);
-        double z = centerZ + (Math.sin(angle) * distance);
+            // Check if chunk is within the Storm Zone radius
+            double chunkCenterX = (chunk.getX() << 4) + 8;
+            double chunkCenterZ = (chunk.getZ() << 4) + 8;
+            double distance = Math.sqrt(
+                Math.pow(chunkCenterX - centerX, 2) +
+                Math.pow(chunkCenterZ - centerZ, 2)
+            );
 
-        return world.getChunkAt((int)x >> 4, (int)z >> 4);
+            if (distance <= maxRadius) {
+                return chunk;
+            }
+        }
+
+        // If no chunk in zone found after 10 attempts, return null
+        return null;
     }
 
     /**
