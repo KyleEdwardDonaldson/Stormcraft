@@ -3,6 +3,7 @@ package dev.ked.stormcraft.schedule;
 import dev.ked.stormcraft.StormcraftPlugin;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.model.StormProfile;
+import dev.ked.stormcraft.zones.ZoneManager;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -17,16 +18,18 @@ import java.util.Map;
 public class CountdownTask extends BukkitRunnable {
     private final StormcraftPlugin plugin;
     private final ConfigManager config;
+    private final ZoneManager zoneManager;
     private final StormProfile profile;
     private final Runnable onComplete;
 
     private int remainingSeconds;
     private final List<Integer> announceSchedule;
 
-    public CountdownTask(StormcraftPlugin plugin, ConfigManager config,
+    public CountdownTask(StormcraftPlugin plugin, ConfigManager config, ZoneManager zoneManager,
                         StormProfile profile, int countdownSeconds, Runnable onComplete) {
         this.plugin = plugin;
         this.config = config;
+        this.zoneManager = zoneManager;
         this.profile = profile;
         this.remainingSeconds = countdownSeconds;
         this.onComplete = onComplete;
@@ -53,8 +56,17 @@ public class CountdownTask extends BukkitRunnable {
 
     /**
      * Announces the countdown to all players.
+     * Skips global broadcast if traveling storms are enabled (tracker handles it).
      */
     private void announceCountdown() {
+        // Skip global announcements if using traveling storms
+        if (config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            if (config.isLogScheduling()) {
+                plugin.getLogger().info("Countdown: " + remainingSeconds + "s remaining (traveling storm mode - no broadcast)");
+            }
+            return;
+        }
+
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("time", formatTime(remainingSeconds));
         placeholders.put("dps", String.format("%.1f", profile.getDamagePerSecond()));

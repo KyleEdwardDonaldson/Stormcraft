@@ -56,6 +56,7 @@ public class StormManager {
     private StormDropsManager stormDropsManager;
     private OreGenerationManager oreGenerationManager;
     private BukkitTask stormDurationTask;
+    private dev.ked.stormcraft.ui.StormTracker stormTracker;
 
     public StormManager(StormcraftPlugin plugin, ConfigManager config,
                        PlayerExposureUtil exposureUtil, WorldGuardIntegration worldGuardIntegration,
@@ -183,7 +184,7 @@ public class StormManager {
         }
 
         // Start countdown task (runs every second = 20 ticks)
-        countdownTask = new CountdownTask(plugin, config, upcomingProfile, countdownSeconds, this::startStorm);
+        countdownTask = new CountdownTask(plugin, config, zoneManager, upcomingProfile, countdownSeconds, this::startStorm);
         countdownTask.runTaskTimer(plugin, 0L, 20L);
 
         if (config.isLogScheduling()) {
@@ -262,6 +263,14 @@ public class StormManager {
             stormDropsManager.runTaskTimer(plugin, dropInterval, dropInterval);
         }
 
+        // Start storm tracker (for traveling storms)
+        if (useTravelingStorm) {
+            stormTracker = new dev.ked.stormcraft.ui.StormTracker(plugin, config, zoneManager);
+            stormTracker.setActiveStorm(travelingStorm);
+            int trackerInterval = config.getStormTrackerUpdateInterval();
+            stormTracker.runTaskTimer(plugin, 0L, trackerInterval);
+        }
+
         if (config.isLogScheduling()) {
             plugin.getLogger().info("Storm active: " + upcomingProfile.getType() + ", " +
                     actualDuration + "s" + (useTravelingStorm ? " (traveling)" : ""));
@@ -314,6 +323,10 @@ public class StormManager {
         if (stormDropsManager != null) {
             stormDropsManager.cancel();
             stormDropsManager = null;
+        }
+        if (stormTracker != null) {
+            stormTracker.shutdown();
+            stormTracker = null;
         }
 
         // Clear weather
@@ -429,6 +442,11 @@ public class StormManager {
     }
 
     private void announceLandfall() {
+        // Skip global announcements if using traveling storms (tracker handles it)
+        if (config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            return;
+        }
+
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("dps", String.format("%.1f", upcomingProfile.getDamagePerSecond()));
         placeholders.put("duration", formatTime(upcomingProfile.getDurationSeconds()));
@@ -438,6 +456,11 @@ public class StormManager {
     }
 
     private void announceCleared() {
+        // Skip global announcements if using traveling storms
+        if (config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            return;
+        }
+
         long nextStormSeconds = getSecondsUntilNextStorm();
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("next", formatTime((int) nextStormSeconds));
@@ -524,7 +547,7 @@ public class StormManager {
         this.upcomingProfile = profile;
         this.currentPhase = StormPhase.COUNTDOWN;
 
-        countdownTask = new CountdownTask(plugin, config, profile, remainingSeconds, this::startStorm);
+        countdownTask = new CountdownTask(plugin, config, zoneManager, profile, remainingSeconds, this::startStorm);
         countdownTask.runTaskTimer(plugin, 0L, 20L);
     }
 

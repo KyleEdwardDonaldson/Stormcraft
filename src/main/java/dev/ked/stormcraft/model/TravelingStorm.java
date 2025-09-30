@@ -11,6 +11,7 @@ public class TravelingStorm {
     private final long startTimeMillis;
     private final int originalDurationSeconds;
     private final double actualDamagePerSecond;
+    private final int rampUpSeconds; // Time to reach full damage
 
     private Location currentLocation;
     private Location targetLocation; // Center of Stormlands
@@ -18,11 +19,12 @@ public class TravelingStorm {
     private int remainingSeconds;
 
     public TravelingStorm(StormProfile profile, int durationSeconds, double actualDamagePerSecond,
-                         Location spawnLocation, Location targetLocation, double movementSpeed) {
+                         Location spawnLocation, Location targetLocation, double movementSpeed, int rampUpSeconds) {
         this.profile = profile;
         this.startTimeMillis = System.currentTimeMillis();
         this.originalDurationSeconds = durationSeconds;
         this.actualDamagePerSecond = actualDamagePerSecond;
+        this.rampUpSeconds = rampUpSeconds;
         this.remainingSeconds = durationSeconds;
         this.currentLocation = spawnLocation.clone();
         this.targetLocation = targetLocation;
@@ -113,6 +115,25 @@ public class TravelingStorm {
 
     public double getActualDamagePerSecond() {
         return actualDamagePerSecond;
+    }
+
+    /**
+     * Gets the current damage per second with ramp-up applied.
+     * Damage starts at 0 and increases to full over rampUpSeconds.
+     */
+    public double getCurrentDamagePerSecond() {
+        if (rampUpSeconds <= 0) {
+            return actualDamagePerSecond;
+        }
+
+        int elapsedSeconds = originalDurationSeconds - remainingSeconds;
+        if (elapsedSeconds >= rampUpSeconds) {
+            return actualDamagePerSecond; // Full damage
+        }
+
+        // Linear ramp: 0 → actualDamagePerSecond over rampUpSeconds
+        double rampProgress = (double) elapsedSeconds / rampUpSeconds;
+        return actualDamagePerSecond * rampProgress;
     }
 
     public Location getCurrentLocation() {

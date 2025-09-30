@@ -21,6 +21,8 @@ damageProfiles:
     maxDurationSeconds: 1800
     minDamagePerSecond: 0.04
     maxDamagePerSecond: 0.1
+    minMovementSpeed: 0.5    # Fast-moving weak storms (50 blocks in ~2 min)
+    maxMovementSpeed: 2.0    # Very fast (50 blocks in 25 sec)
     extraEffects:
       blindness: false
       slownessAmplifier: -1
@@ -30,6 +32,8 @@ damageProfiles:
     maxDurationSeconds: 1200
     minDamagePerSecond: 0.2
     maxDamagePerSecond: 0.5
+    minMovementSpeed: 0.15   # Slow-moving (50 blocks in ~5.5 min)
+    maxMovementSpeed: 0.5    # Moderate (50 blocks in ~2 min)
     extraEffects:
       blindness: true
       slownessAmplifier: 0
@@ -39,6 +43,8 @@ damageProfiles:
     maxDurationSeconds: 1200
     minDamagePerSecond: 1.0
     maxDamagePerSecond: 3.0
+    minMovementSpeed: 0.03   # Very slow crawl (50 blocks in ~30 min)
+    maxMovementSpeed: 0.2    # Slow advance (50 blocks in ~4 min)
     extraEffects:
       blindness: true
       slownessAmplifier: 2
@@ -114,8 +120,34 @@ zones:
 # Traveling Storm System - Storms move across the map toward Stormlands
 travelingStorms:
   enabled: false  # Set to true for storms that move (requires zones enabled)
-  movementSpeed: 5.0  # Blocks per second storm moves
   damageRadius: 50.0  # Radius in blocks where storm damages players
+  # Movement speed is now defined per storm type in damageProfiles (see above)
+
+  # Erratic Spawning - Storms spawn unpredictably
+  erraticSpawning:
+    enabled: true               # Enable random burst spawning
+    minBurstSize: 1             # Minimum storms per burst
+    maxBurstSize: 6             # Maximum storms per burst (can spawn 1-6 at once!)
+    minDelaySeconds: 180        # Minimum time between bursts (3 minutes)
+    maxDelaySeconds: 900        # Maximum time between bursts (15 minutes)
+    burstChanceWeights:         # Probability of each burst size
+      1: 0.40                   # 40% chance of 1 storm
+      2: 0.25                   # 25% chance of 2 storms
+      3: 0.15                   # 15% chance of 3 storms
+      4: 0.10                   # 10% chance of 4 storms
+      5: 0.07                   # 7% chance of 5 storms
+      6: 0.03                   # 3% chance of 6 storms
+
+  # Spawn Location - Border between Storm Zone and Safe Zone
+  spawnLocation:
+    spawnAtBorder: true         # Spawn at zone border (overrides old logic)
+    borderBias: 0.7             # 0.0 = Safe Zone side, 1.0 = Storm Zone side, 0.7 = weighted toward Storm Zone
+    borderSpread: 500           # How many blocks on either side of border to spawn (+/- 500 blocks)
+
+  # Damage Ramp-Up - Storms build up damage over time
+  damageRampUp:
+    enabled: true               # Enable damage ramp-up
+    rampUpSeconds: 60           # Time to reach full damage (1 minute)
 
 # Block Damage - Buildings degrade during storms in Stormlands
 blockDamage:
@@ -136,6 +168,12 @@ oreGeneration:
   baseChance: 0.001  # 0.1% chance per block check
   chunksPerTick: 2  # Chunks to check per tick
   attemptsPerChunk: 3  # Block checks per chunk
+
+# Storm Tracker - UI display for traveling storms
+stormTracker:
+  mode: "actionbar"  # "actionbar" or "bossbar"
+  range: 1000  # Distance in blocks to show storm tracker (1000 blocks = 3.3 min warning at 5 b/s)
+  updateInterval: 20  # Update frequency in ticks (20 = 1 second)
 
 debug:
   logExposureSamples: false

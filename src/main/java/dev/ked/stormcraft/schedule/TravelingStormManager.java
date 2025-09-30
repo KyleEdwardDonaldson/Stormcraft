@@ -51,6 +51,14 @@ public class TravelingStormManager extends BukkitRunnable {
         Location spawnLocation = getRandomSpawnLocation(world);
         Location targetLocation = getStormlandsCenter(world);
 
+        // Randomize movement speed from profile's range
+        double minSpeed = profile.getMinMovementSpeed();
+        double maxSpeed = profile.getMaxMovementSpeed();
+        double actualSpeed = minSpeed + (random.nextDouble() * (maxSpeed - minSpeed));
+
+        // Get ramp-up duration
+        int rampUpSeconds = config.isDamageRampUpEnabled() ? config.getDamageRampUpSeconds() : 0;
+
         // Create traveling storm
         activeStorm = new TravelingStorm(
             profile,
@@ -58,7 +66,8 @@ public class TravelingStormManager extends BukkitRunnable {
             actualDamage,
             spawnLocation,
             targetLocation,
-            config.getStormMovementSpeed()
+            actualSpeed,
+            rampUpSeconds
         );
 
         // Start movement task (runs every second)
@@ -72,7 +81,7 @@ public class TravelingStormManager extends BukkitRunnable {
         if (config.isLogScheduling()) {
             plugin.getLogger().info("Traveling storm started at (" +
                                   (int)spawnLocation.getX() + ", " + (int)spawnLocation.getZ() +
-                                  ") moving toward Stormlands");
+                                  ") moving toward Stormlands at " + String.format("%.2f", actualSpeed) + " blocks/sec");
         }
     }
 
@@ -130,8 +139,7 @@ public class TravelingStormManager extends BukkitRunnable {
 
     /**
      * Gets a random spawn location for the storm.
-     * If zones enabled, spawns outside Stormlands.
-     * Otherwise, spawns anywhere within map bounds.
+     * Can spawn at zone border or use old logic based on config.
      */
     private Location getRandomSpawnLocation(World world) {
         if (!zoneManager.isEnabled()) {
@@ -143,11 +151,31 @@ public class TravelingStormManager extends BukkitRunnable {
             return new Location(world, x, 64, z);
         }
 
-        // Spawn outside Storm Zone, moving toward Stormlands
         double centerX = zoneManager.getCenterX();
         double centerZ = zoneManager.getCenterZ();
-        double minRadius = zoneManager.getStormZoneRadius() + 500; // 500 blocks outside
-        double maxRadius = minRadius + 2000; // Up to 2000 blocks further out
+
+        // New spawn logic: at border between Storm Zone and Safe Zone
+        if (config.isSpawnAtBorder()) {
+            double borderRadius = zoneManager.getStormZoneRadius(); // Exact border
+            double bias = config.getBorderBias(); // 0.0 = Safe Zone, 1.0 = Storm Zone
+            double spread = config.getBorderSpread(); // +/- spread around border
+
+            // Calculate actual radius with bias
+            // bias 0.7 means 70% toward Storm Zone, 30% toward Safe Zone
+            double biasedOffset = (random.nextDouble() - 0.5) * 2 * spread; // -spread to +spread
+            double actualRadius = borderRadius + (biasedOffset * (bias * 2 - 1));
+
+            // Random angle around the circle
+            double angle = random.nextDouble() * 2 * Math.PI;
+            double x = centerX + (Math.cos(angle) * actualRadius);
+            double z = centerZ + (Math.sin(angle) * actualRadius);
+
+            return new Location(world, x, 64, z);
+        }
+
+        // Old logic: Spawn outside Storm Zone, moving toward Stormlands
+        double minRadius = zoneManager.getStormZoneRadius() + 500;
+        double maxRadius = minRadius + 2000;
 
         double angle = random.nextDouble() * 2 * Math.PI;
         double distance = minRadius + (random.nextDouble() * (maxRadius - minRadius));

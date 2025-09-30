@@ -64,6 +64,23 @@ public class ConfigManager {
     private double stormMovementSpeed;
     private double stormDamageRadius;
 
+    // Erratic Spawning
+    private boolean erraticSpawningEnabled;
+    private int minBurstSize;
+    private int maxBurstSize;
+    private int minBurstDelaySeconds;
+    private int maxBurstDelaySeconds;
+    private Map<Integer, Double> burstChanceWeights;
+
+    // Spawn Location
+    private boolean spawnAtBorder;
+    private double borderBias;
+    private double borderSpread;
+
+    // Damage Ramp-Up
+    private boolean damageRampUpEnabled;
+    private int damageRampUpSeconds;
+
     // Block Damage
     private boolean blockDamageEnabled;
     private double blockDamageChance;
@@ -80,6 +97,11 @@ public class ConfigManager {
     private double oreGenerationChance;
     private int oreGenerationChunksPerTick;
     private int oreGenerationAttemptsPerChunk;
+
+    // Storm Tracker
+    private String stormTrackerMode;
+    private double stormTrackerRange;
+    private int stormTrackerUpdateInterval;
 
     // Messages
     private String messagePrefix;
@@ -151,13 +173,15 @@ public class ConfigManager {
                     int maxDuration = typeSection.getInt("maxDurationSeconds", 600);
                     double minDps = typeSection.getDouble("minDamagePerSecond", 1.0);
                     double maxDps = typeSection.getDouble("maxDamagePerSecond", 3.0);
+                    double minSpeed = typeSection.getDouble("minMovementSpeed", 0.1);
+                    double maxSpeed = typeSection.getDouble("maxMovementSpeed", 1.0);
 
                     ConfigurationSection effectsSection = typeSection.getConfigurationSection("extraEffects");
                     boolean blindness = effectsSection != null && effectsSection.getBoolean("blindness", false);
                     int slowness = effectsSection != null ? effectsSection.getInt("slownessAmplifier", -1) : -1;
                     double lightning = effectsSection != null ? effectsSection.getDouble("lightningStrikeChance", 0.0) : 0.0;
 
-                    damageProfiles.put(type, new StormProfile(type, minDuration, maxDuration, minDps, maxDps, blindness, slowness, lightning));
+                    damageProfiles.put(type, new StormProfile(type, minDuration, maxDuration, minDps, maxDps, minSpeed, maxSpeed, blindness, slowness, lightning));
                 }
             }
         }
@@ -218,10 +242,73 @@ public class ConfigManager {
             travelingStormsEnabled = travelingStormSection.getBoolean("enabled", true);
             stormMovementSpeed = travelingStormSection.getDouble("movementSpeed", 5.0);
             stormDamageRadius = travelingStormSection.getDouble("damageRadius", 50.0);
+
+            // Load erratic spawning settings
+            ConfigurationSection erraticSection = travelingStormSection.getConfigurationSection("erraticSpawning");
+            if (erraticSection != null) {
+                erraticSpawningEnabled = erraticSection.getBoolean("enabled", true);
+                minBurstSize = erraticSection.getInt("minBurstSize", 1);
+                maxBurstSize = erraticSection.getInt("maxBurstSize", 6);
+                minBurstDelaySeconds = erraticSection.getInt("minDelaySeconds", 180);
+                maxBurstDelaySeconds = erraticSection.getInt("maxDelaySeconds", 900);
+
+                // Load burst chance weights
+                burstChanceWeights = new HashMap<>();
+                ConfigurationSection weightsSection = erraticSection.getConfigurationSection("burstChanceWeights");
+                if (weightsSection != null) {
+                    for (String key : weightsSection.getKeys(false)) {
+                        int burstSize = Integer.parseInt(key);
+                        double weight = weightsSection.getDouble(key);
+                        burstChanceWeights.put(burstSize, weight);
+                    }
+                }
+            } else {
+                erraticSpawningEnabled = false;
+                minBurstSize = 1;
+                maxBurstSize = 1;
+                minBurstDelaySeconds = 900;
+                maxBurstDelaySeconds = 2400;
+                burstChanceWeights = new HashMap<>();
+                burstChanceWeights.put(1, 1.0);
+            }
+
+            // Load spawn location settings
+            ConfigurationSection spawnLocationSection = travelingStormSection.getConfigurationSection("spawnLocation");
+            if (spawnLocationSection != null) {
+                spawnAtBorder = spawnLocationSection.getBoolean("spawnAtBorder", true);
+                borderBias = spawnLocationSection.getDouble("borderBias", 0.7);
+                borderSpread = spawnLocationSection.getDouble("borderSpread", 500.0);
+            } else {
+                spawnAtBorder = false;
+                borderBias = 0.7;
+                borderSpread = 500.0;
+            }
+
+            // Load damage ramp-up settings
+            ConfigurationSection rampUpSection = travelingStormSection.getConfigurationSection("damageRampUp");
+            if (rampUpSection != null) {
+                damageRampUpEnabled = rampUpSection.getBoolean("enabled", true);
+                damageRampUpSeconds = rampUpSection.getInt("rampUpSeconds", 60);
+            } else {
+                damageRampUpEnabled = false;
+                damageRampUpSeconds = 0;
+            }
         } else {
             travelingStormsEnabled = true;
             stormMovementSpeed = 5.0;
             stormDamageRadius = 50.0;
+            erraticSpawningEnabled = false;
+            minBurstSize = 1;
+            maxBurstSize = 1;
+            minBurstDelaySeconds = 900;
+            maxBurstDelaySeconds = 2400;
+            burstChanceWeights = new HashMap<>();
+            burstChanceWeights.put(1, 1.0);
+            spawnAtBorder = false;
+            borderBias = 0.7;
+            borderSpread = 500.0;
+            damageRampUpEnabled = false;
+            damageRampUpSeconds = 0;
         }
 
         // Load block damage settings
@@ -248,6 +335,18 @@ public class ConfigManager {
             stormDropChanceStormlands = 0.1;
             stormDropChanceStormZone = 0.05;
             stormDropsCheckIntervalTicks = 100;
+        }
+
+        // Load storm tracker settings
+        ConfigurationSection stormTrackerSection = config.getConfigurationSection("stormTracker");
+        if (stormTrackerSection != null) {
+            stormTrackerMode = stormTrackerSection.getString("mode", "actionbar");
+            stormTrackerRange = stormTrackerSection.getDouble("range", 500.0);
+            stormTrackerUpdateInterval = stormTrackerSection.getInt("updateInterval", 20);
+        } else {
+            stormTrackerMode = "actionbar";
+            stormTrackerRange = 500.0;
+            stormTrackerUpdateInterval = 20;
         }
 
         // Load ore generation settings
@@ -424,6 +523,20 @@ public class ConfigManager {
     public double getStormMovementSpeed() { return stormMovementSpeed; }
     public double getStormDamageRadius() { return stormDamageRadius; }
 
+    public boolean isErraticSpawningEnabled() { return erraticSpawningEnabled; }
+    public int getMinBurstSize() { return minBurstSize; }
+    public int getMaxBurstSize() { return maxBurstSize; }
+    public int getMinBurstDelaySeconds() { return minBurstDelaySeconds; }
+    public int getMaxBurstDelaySeconds() { return maxBurstDelaySeconds; }
+    public Map<Integer, Double> getBurstChanceWeights() { return burstChanceWeights; }
+
+    public boolean isSpawnAtBorder() { return spawnAtBorder; }
+    public double getBorderBias() { return borderBias; }
+    public double getBorderSpread() { return borderSpread; }
+
+    public boolean isDamageRampUpEnabled() { return damageRampUpEnabled; }
+    public int getDamageRampUpSeconds() { return damageRampUpSeconds; }
+
     // Block Damage getters
     public boolean isBlockDamageEnabled() { return blockDamageEnabled; }
     public double getBlockDamageChance() { return blockDamageChance; }
@@ -440,6 +553,10 @@ public class ConfigManager {
     public double getOreGenerationChance() { return oreGenerationChance; }
     public int getOreGenerationChunksPerTick() { return oreGenerationChunksPerTick; }
     public int getOreGenerationAttemptsPerChunk() { return oreGenerationAttemptsPerChunk; }
+
+    public String getStormTrackerMode() { return stormTrackerMode; }
+    public double getStormTrackerRange() { return stormTrackerRange; }
+    public int getStormTrackerUpdateInterval() { return stormTrackerUpdateInterval; }
 
     // Message formatters
     public Component formatMessage(String messageKey, Map<String, String> placeholders) {

@@ -67,7 +67,8 @@ public class DamageTask extends BukkitRunnable {
         }
 
         StormProfile profile = (activeStorm != null) ? activeStorm.getProfile() : travelingStorm.getProfile();
-        double actualDamage = (activeStorm != null) ? activeStorm.getActualDamagePerSecond() : travelingStorm.getActualDamagePerSecond();
+        // Use getCurrentDamagePerSecond for traveling storms (includes ramp-up)
+        double actualDamage = (activeStorm != null) ? activeStorm.getActualDamagePerSecond() : travelingStorm.getCurrentDamagePerSecond();
         List<Player> exposedPlayers = new ArrayList<>();
 
         // Check all online players
@@ -97,7 +98,9 @@ public class DamageTask extends BukkitRunnable {
             if (world != null) {
                 for (LivingEntity entity : world.getLivingEntities()) {
                     if (!(entity instanceof Player) && isEntityExposedToStorm(entity)) {
-                        applyMobDamage(entity, activeStorm.getActualDamagePerSecond());
+                        // Use current damage (with ramp-up for traveling storms)
+                        double mobDamage = (activeStorm != null) ? activeStorm.getActualDamagePerSecond() : travelingStorm.getCurrentDamagePerSecond();
+                        applyMobDamage(entity, mobDamage);
                     }
                 }
             }

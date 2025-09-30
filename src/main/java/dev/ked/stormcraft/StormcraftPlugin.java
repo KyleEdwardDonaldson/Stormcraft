@@ -139,6 +139,7 @@ public class StormcraftPlugin extends JavaPlugin {
 
     private void registerCommands() {
         StormcraftCommand commandHandler = new StormcraftCommand(this, configManager, stormManager);
+        dev.ked.stormcraft.command.StormsCommand stormsHandler = new dev.ked.stormcraft.command.StormsCommand(this, configManager, stormManager);
 
         PluginCommand stormcraftCmd = getCommand("stormcraft");
         if (stormcraftCmd != null) {
@@ -154,6 +155,13 @@ public class StormcraftPlugin extends JavaPlugin {
             stormCmd.setTabCompleter(commandHandler);
         } else {
             getLogger().warning("Failed to register /storm command!");
+        }
+
+        PluginCommand stormsCmd = getCommand("storms");
+        if (stormsCmd != null) {
+            stormsCmd.setExecutor(stormsHandler);
+        } else {
+            getLogger().warning("Failed to register /storms command!");
         }
     }
 

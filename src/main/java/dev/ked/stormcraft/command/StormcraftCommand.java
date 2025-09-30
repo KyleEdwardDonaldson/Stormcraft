@@ -4,9 +4,12 @@ import dev.ked.stormcraft.StormcraftPlugin;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.model.ActiveStorm;
 import dev.ked.stormcraft.model.StormType;
+import dev.ked.stormcraft.model.TravelingStorm;
 import dev.ked.stormcraft.schedule.StormManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -59,6 +62,14 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
     }
 
     private void showStatus(CommandSender sender) {
+        // Check for traveling storm first
+        TravelingStorm travelingStorm = stormManager.getTravelingStorm();
+        if (travelingStorm != null) {
+            showTravelingStormStatus(sender, travelingStorm);
+            return;
+        }
+
+        // Fall back to stationary storm status
         if (stormManager.hasActiveStorm()) {
             ActiveStorm storm = stormManager.getActiveStorm();
             Map<String, String> placeholders = Map.of(
@@ -80,6 +91,59 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
             );
             sender.sendMessage(config.formatMessage("status.idle", placeholders));
         }
+    }
+
+    private void showTravelingStormStatus(CommandSender sender, TravelingStorm storm) {
+        Component message = Component.text("⛈ ", NamedTextColor.GOLD, TextDecoration.BOLD)
+                .append(Component.text("Traveling Storm", NamedTextColor.YELLOW, TextDecoration.BOLD))
+                .append(Component.newline())
+                .append(Component.text("Type: ", NamedTextColor.GRAY))
+                .append(Component.text(formatStormType(storm.getProfile().getType().name()), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(Component.text("Remaining: ", NamedTextColor.GRAY))
+                .append(Component.text(formatTime(storm.getRemainingSeconds()), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(Component.text("Damage: ", NamedTextColor.GRAY))
+                .append(Component.text(String.format("%.1f HP/s", storm.getActualDamagePerSecond()), NamedTextColor.RED));
+
+        // Add distance if sender is a player
+        if (sender instanceof Player player) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(player.getWorld())) {
+                double distance = player.getLocation().distance(stormLoc);
+                String direction = getDirection(player.getLocation(), stormLoc);
+                NamedTextColor distColor = getDistanceColor(distance);
+
+                message = message.append(Component.newline())
+                        .append(Component.text("Distance: ", NamedTextColor.GRAY))
+                        .append(Component.text(direction + " ", NamedTextColor.WHITE))
+                        .append(Component.text((int)distance + " blocks", distColor));
+
+                if (distance <= config.getStormDamageRadius()) {
+                    message = message.append(Component.newline())
+                            .append(Component.text("⚡ YOU ARE IN THE STORM! ⚡", NamedTextColor.RED, TextDecoration.BOLD));
+                }
+            }
+        }
+
+        sender.sendMessage(message);
+    }
+
+    private String getDirection(Location from, Location to) {
+        double dx = to.getX() - from.getX();
+        double dz = to.getZ() - from.getZ();
+        double angle = Math.toDegrees(Math.atan2(dz, dx));
+        angle = (angle + 90) % 360;
+        if (angle < 0) angle += 360;
+        int index = (int) Math.round(angle / 45.0) % 8;
+        String[] directions = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+        return directions[index];
+    }
+
+    private NamedTextColor getDistanceColor(double distance) {
+        if (distance < 100) return NamedTextColor.RED;
+        else if (distance < 300) return NamedTextColor.YELLOW;
+        else return NamedTextColor.AQUA;
     }
 
     private void handleStart(CommandSender sender, String[] args) {

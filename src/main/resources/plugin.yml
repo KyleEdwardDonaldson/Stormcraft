@@ -24,8 +24,13 @@ commands:
     permission: stormcraft.view
     permission-message: "&cYou don't have permission."
   storm:
-    description: Check storm status
+    description: Check closest storm status
     usage: "/storm"
+    permission: stormcraft.view
+    permission-message: "&cYou don't have permission."
+  storms:
+    description: List all active storms
+    usage: "/storms"
     permission: stormcraft.view
     permission-message: "&cYou don't have permission."
 

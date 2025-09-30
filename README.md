@@ -52,10 +52,15 @@ Transform your world with three risk/reward zones:
   - Mostly weak storms
 
 #### **Traveling Storms**
-- Storms spawn at random locations
-- Move toward Stormlands center (configurable speed)
-- Visible damage radius
+- Storms spawn at random locations and move toward Stormlands center
+- **Variable movement speeds** per storm type (0.03 - 2.0 blocks/second)
+  - Fast-moving weak storms (pass in ~2 minutes)
+  - Slow-moving medium storms (pass in 2-5 minutes)
+  - Very slow dangerous storms (pass in 4-30 minutes!)
+- Visible damage radius on map
+- **ActionBar/BossBar storm tracker** shows distance and direction
 - Real-time tracking on Dynmap
+- Use `/storm` to check distance anytime
 
 #### **Block Damage System**
 - Buildings degrade during storms in Stormlands
@@ -132,10 +137,26 @@ damageProfiles:
     maxDurationSeconds: 1800
     minDamagePerSecond: 0.04     # ~5 minutes to kill
     maxDamagePerSecond: 0.1
+    minMovementSpeed: 0.5        # Fast-moving (50 blocks in ~2 min)
+    maxMovementSpeed: 2.0        # Very fast (50 blocks in 25 sec)
     extraEffects:
       blindness: false
       slownessAmplifier: -1
       lightningStrikeChance: 0.02
+  medium:
+    minDurationSeconds: 300
+    maxDurationSeconds: 1200
+    minDamagePerSecond: 0.2
+    maxDamagePerSecond: 0.5
+    minMovementSpeed: 0.15       # Slow (50 blocks in ~5.5 min)
+    maxMovementSpeed: 0.5        # Moderate (50 blocks in ~2 min)
+  longDangerous:
+    minDurationSeconds: 180
+    maxDurationSeconds: 1200
+    minDamagePerSecond: 1.0
+    maxDamagePerSecond: 3.0
+    minMovementSpeed: 0.03       # Very slow crawl (50 blocks in ~30 min)
+    maxMovementSpeed: 0.2        # Slow advance (50 blocks in ~4 min)
 ```
 
 ### Zone System Setup
@@ -169,8 +190,14 @@ zones:
 # Traveling storms (requires zones enabled)
 travelingStorms:
   enabled: false
-  movementSpeed: 5.0      # Blocks per second
   damageRadius: 50.0      # Damage area around storm
+  # Movement speed is per storm type (see damageProfiles above)
+
+# Storm Tracker UI (for traveling storms)
+stormTracker:
+  mode: "actionbar"       # "actionbar" or "bossbar"
+  range: 1000             # Distance in blocks to show tracker
+  updateInterval: 20      # Ticks between updates (20 = 1 second)
 
 # Block damage (only in Stormlands)
 blockDamage:
@@ -222,8 +249,9 @@ economy:
 ## 🎮 Commands
 
 ### Player Commands
-- `/storm` - Check current storm status
-- `/stormcraft` - Alias for storm status
+- `/storm` - Check closest storm status (distance, direction, time remaining)
+- `/storms` - List all active storms
+- `/stormcraft` - Alias for `/storm`
 
 ### Admin Commands
 - `/stormcraft start [type] [duration]` - Force start a storm
@@ -256,6 +284,81 @@ economy:
 
 ---
 
+## 🎯 Storm Tracker Setup (Traveling Storms)
+
+When traveling storms are enabled, the plugin displays real-time storm tracking via **ActionBar** or **BossBar** instead of global chat announcements.
+
+### Configuration
+
+```yaml
+stormTracker:
+  mode: "actionbar"  # Options: "actionbar" or "bossbar"
+  range: 1000        # Distance in blocks to show tracker
+  updateInterval: 20 # Update frequency in ticks (20 = 1 second)
+```
+
+### Display Modes
+
+**ActionBar Mode** (Recommended)
+- Shows compact storm info above hotbar
+- Example: `⛈ STORM NW 450m`
+- Color-coded by distance:
+  - 🔴 Red (< 100 blocks) - DANGER!
+  - 🟡 Yellow (100-300 blocks) - Warning
+  - 🔵 Blue (> 300 blocks) - Distant
+- Changes to `⚡ IN STORM ⚡` when inside damage radius
+
+**BossBar Mode**
+- Shows persistent bar at top of screen
+- Progress bar fills as storm approaches
+- Color changes with distance (blue → yellow → red)
+- Title shows direction and distance
+- More visible but takes up more screen space
+
+### Setup Steps
+
+1. **Enable zones and traveling storms** in `config.yml`:
+   ```yaml
+   zones:
+     enabled: true
+     # ... zone configuration
+
+   travelingStorms:
+     enabled: true
+     damageRadius: 50.0
+   ```
+
+2. **Configure storm tracker** (optional - uses defaults above):
+   ```yaml
+   stormTracker:
+     mode: "actionbar"  # or "bossbar"
+     range: 1000
+     updateInterval: 20
+   ```
+
+3. **Restart server**
+
+### How It Works
+
+- Players see storm info **only when within range** (default 1000 blocks)
+- Displays **cardinal direction** (N, NE, E, SE, S, SW, W, NW) and distance
+- **No global announcements** when traveling storms enabled (tracker replaces them)
+- Works with `/storm` command to check status anytime
+
+### Warning Times by Storm Type
+
+With 1000 block range and 50 block damage radius:
+
+| Storm Type     | Speed Range | Warning Time      |
+|----------------|-------------|-------------------|
+| Short Weak     | 0.5-2.0 b/s | 8-33 minutes      |
+| Medium         | 0.15-0.5 b/s| 33-111 minutes    |
+| Long Dangerous | 0.03-0.2 b/s| 83-555+ minutes   |
+
+*Note: Dangerous storms move very slowly and can be visible for hours before arrival!*
+
+---
+
 ## 🗺️ Dynmap Setup
 
 1. **Install Dynmap** plugin (download from SpigotMC)
@@ -265,7 +368,7 @@ economy:
      enabled: true
    ```
 3. **Restart server**
-4. **Access Dynmap** at `http://your-server-ip:8123`
+4. **Access Dynmap** at `http://storm.quetzal.games:8123`
 
 **What you'll see:**
 - 🔴 Red circle = Stormlands (high danger)
@@ -333,7 +436,9 @@ Output: `target/stormcraft-0.1.0.jar`
 ### Balanced Server (Recommended)
 - Enable zones for endgame content
 - Keep traveling storms enabled for dynamic gameplay
+- Use **ActionBar mode** for storm tracker (less intrusive)
 - Set Stormlands radius to 2500 blocks (small but rewarding)
+- Set tracker range to 1000 blocks (3+ minutes warning)
 - Enable all resource systems (drops, ore gen, block damage)
 
 ### Hardcore Server
