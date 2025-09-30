@@ -3,8 +3,8 @@ package dev.ked.stormcraft.integration;
 import dev.ked.stormcraft.model.TravelingStorm;
 
 /**
- * Manages all map integration plugins (squaremap).
- * Delegates storm marker updates to all enabled map integrations.
+ * Manages all map integration plugins (squaremap only).
+ * Delegates storm marker updates to enabled map integration.
  */
 public class MapIntegrationManager {
     private final SquaremapIntegration squaremapIntegration;
@@ -14,7 +14,7 @@ public class MapIntegrationManager {
     }
 
     /**
-     * Updates storm marker on all enabled map integrations.
+     * Updates storm marker on squaremap.
      */
     public void updateStormMarker(TravelingStorm storm) {
         if (squaremapIntegration != null && squaremapIntegration.isEnabled()) {
@@ -23,7 +23,7 @@ public class MapIntegrationManager {
     }
 
     /**
-     * Removes storm marker from all enabled map integrations.
+     * Removes storm marker from squaremap.
      */
     public void removeStormMarker() {
         if (squaremapIntegration != null && squaremapIntegration.isEnabled()) {
@@ -32,7 +32,7 @@ public class MapIntegrationManager {
     }
 
     /**
-     * Reloads zones on all enabled map integrations.
+     * Reloads zones on squaremap.
      */
     public void reloadZones() {
         if (squaremapIntegration != null && squaremapIntegration.isEnabled()) {
@@ -41,7 +41,7 @@ public class MapIntegrationManager {
     }
 
     /**
-     * Checks if any map integration is enabled.
+     * Checks if squaremap integration is enabled.
      */
     public boolean isAnyEnabled() {
         return (squaremapIntegration != null && squaremapIntegration.isEnabled());

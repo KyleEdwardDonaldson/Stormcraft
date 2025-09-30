@@ -60,8 +60,7 @@ public class StormcraftPlugin extends JavaPlugin {
             getLogger().info("Zone system enabled: Stormlands, Storm Zone, Safe Zone");
         }
 
-        // Initialize map integrations
-        // Only create squaremap integration if plugin is present
+        // Initialize map integration (squaremap only)
         if (Bukkit.getPluginManager().getPlugin("squaremap") != null) {
             try {
                 squaremapIntegration = new SquaremapIntegration(this, zoneManager);

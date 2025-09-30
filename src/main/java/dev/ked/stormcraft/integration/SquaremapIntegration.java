@@ -53,8 +53,10 @@ public class SquaremapIntegration {
                     .defaultHidden(false)
                     .build();
 
-            // Register layer with all enabled worlds
-            for (String worldName : plugin.getConfigManager().getEnabledWorlds()) {
+            // Register layer only on the first enabled world (zone world)
+            // Zone markers should only appear on one world where zones are configured
+            if (!plugin.getConfigManager().getEnabledWorlds().isEmpty()) {
+                String worldName = plugin.getConfigManager().getEnabledWorlds().get(0);
                 org.bukkit.World bukkitWorld = Bukkit.getWorld(worldName);
                 if (bukkitWorld != null) {
                     WorldIdentifier worldId = BukkitAdapter.worldIdentifier(bukkitWorld);
@@ -96,33 +98,33 @@ public class SquaremapIntegration {
 
         Point center = Point.of(centerX, centerZ);
 
-        // Create Stormlands circle (innermost, red)
+        // Create Stormlands circle (inner boundary, red)
         Circle stormlandsCircle = Marker.circle(center, zoneManager.getStormlandsRadius());
         stormlandsCircle.markerOptions(
             MarkerOptions.builder()
                 .strokeColor(Color.RED)
-                .strokeWeight(2)
-                .fillColor(new Color(255, 68, 68, 77)) // Red with alpha
+                .strokeWeight(3)
+                .fillColor(new Color(255, 68, 68, 40)) // Light red fill
                 .clickTooltip("Stormlands (High Risk, High Reward)")
                 .build()
         );
         zoneMarkers.put("stormlands", stormlandsCircle);
         layerProvider.addMarker(Key.of("stormlands_zone"), stormlandsCircle);
 
-        // Create Storm Zone circle (middle ring, orange)
+        // Create Storm Zone circle (middle boundary, yellow/orange)
         Circle stormZoneCircle = Marker.circle(center, zoneManager.getStormZoneRadius());
         stormZoneCircle.markerOptions(
             MarkerOptions.builder()
-                .strokeColor(new Color(255, 136, 0))
-                .strokeWeight(2)
-                .fillColor(new Color(255, 170, 0, 51)) // Orange with alpha
-                .clickTooltip("Storm Zone (Moderate Risk)")
+                .strokeColor(new Color(255, 200, 0))
+                .strokeWeight(3)
+                .fillColor(new Color(0, 0, 0, 0)) // No fill - just boundary line
+                .clickTooltip("Storm Zone Border")
                 .build()
         );
         zoneMarkers.put("stormzone", stormZoneCircle);
         layerProvider.addMarker(Key.of("storm_zone"), stormZoneCircle);
 
-        // Create Safe Zone circle (outermost, green)
+        // Create Safe Zone circle (outer boundary, green)
         Circle safeZoneCircle = Marker.circle(center, zoneManager.getSafeZoneRadius());
         safeZoneCircle.markerOptions(
             MarkerOptions.builder()
