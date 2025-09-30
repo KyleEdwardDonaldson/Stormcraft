@@ -406,11 +406,16 @@ limitations under the License.
 
 ## 🤝 Credits
 
-**Author:** Kyle Donaldson
+**Author:** Kyle Edward Donaldson
+
 **Website:** https://ked.dev
+
 **Version:** 0.1.0
+
 **Minecraft Version:** 1.21.3+
+
 **API:** Paper/Spigot
+
 
 ---
 
