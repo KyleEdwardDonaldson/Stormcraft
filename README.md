@@ -115,6 +115,21 @@ Transform your world with three risk/reward zones:
    - Configure `plugins/Stormcraft/config.yml`
    - Restart again
 
+4. **Optional: Custom World Generation**
+   - Install Multiverse-Core (or similar world management plugin)
+   - Create a new world with Stormcraft generator:
+     ```
+     /mv create stormworld normal -g Stormcraft
+     ```
+   - The generator creates ring-based biome distribution:
+     - **Stormlands (0-2500):** Mountain biomes, dramatic peaks
+     - **Storm Zone (2500-5000):** Open plains and hills
+     - **Safe Zone (5000-10000):** Dense forests
+     - **Outer Wilds (10000+):** Normal vanilla biomes
+   - Biomes transition smoothly with no harsh boundaries
+   - All vanilla structures spawn naturally based on biomes
+   - Perfect thematic integration with storm system!
+
 ---
 
 ## ⚙️ Configuration
@@ -428,6 +443,90 @@ When using erratic spawning, you'll see up to 6 simultaneous storms on the map, 
 
 ---
 
+## 🌍 Custom World Generation
+
+Stormcraft includes an optional custom world generator that creates **thematically perfect storm worlds** with ring-based biome distribution.
+
+### How It Works
+
+The generator uses distance from world center (0,0) to determine which biomes spawn:
+
+**Ring 1: Stormlands Core (0-2500 blocks)**
+- Biomes: Jagged Peaks, Frozen Peaks, Stony Peaks, Windswept Hills
+- Terrain: Dramatic mountains (y=150+), harsh peaks
+- Structures: Ancient Cities, Strongholds, Mineshafts
+- Theme: Most dangerous, apocalyptic wasteland
+
+**Ring 2: Storm Zone (2500-5000 blocks)**
+- Biomes: Plains, Sunflower Plains, Savanna, Meadow
+- Terrain: Open, rolling hills
+- Structures: Villages, Pillager Outposts
+- Theme: Exposed, moderate danger
+
+**Ring 3: Safe Zone (5000-10000 blocks)**
+- Biomes: Dark Forest, Jungle, Taiga, Swamp, Mangrove
+- Terrain: Dense forests, natural shelter
+- Structures: Woodland Mansions, Jungle Temples, Witch Huts
+- Theme: Protected, buildable, safe
+
+**Ring 4: Outer Wilds (10000+ blocks)**
+- Biomes: All vanilla biomes (normal distribution)
+- Terrain: Standard Minecraft
+- Structures: Everything vanilla
+- Theme: Normal gameplay
+
+### Setup Instructions
+
+1. **Install Multiverse-Core** (recommended world manager):
+   ```
+   https://dev.bukkit.org/projects/multiverse-core
+   ```
+
+2. **Create new world with Stormcraft generator:**
+   ```
+   /mv create stormworld normal -g Stormcraft
+   ```
+
+3. **Configure zones** (use same center as world generation):
+   ```yaml
+   zones:
+     enabled: true
+     centerX: 0  # Must match world center
+     centerZ: 0  # Must match world center
+   ```
+
+4. **Teleport to new world:**
+   ```
+   /mv tp stormworld
+   ```
+
+### Features
+
+✅ **Uses vanilla biomes** - No custom biomes, full compatibility
+✅ **Vanilla structures work** - Villages, temples, mansions spawn naturally
+✅ **Smooth transitions** - Biomes blend naturally over 300 blocks
+✅ **Noise-based variation** - Not perfect circles, natural-looking
+✅ **Works with existing worlds** - Only applies to NEW worlds created with generator
+✅ **Performance optimized** - Minimal overhead, async generation
+
+### What Players Experience
+
+```
+Spawn in Safe Zone → Dark forests, natural shelter
+Walk 5000 blocks → Terrain opens up, plains and savannas appear
+Walk 2500 blocks → Dramatic mountains loom, storms intensify
+Reach center (0,0) → Highest peaks, deadliest storms, best loot
+```
+
+### Important Notes
+
+- **Cannot modify existing worlds** - Only works for NEW world creation
+- **Reuses existing storm spawn weights** - Biome preferences from config apply
+- **Loot scales naturally** - Vanilla structures have better loot in dangerous zones (see below)
+- **Map integrations work** - Dynmap/squaremap show zone boundaries perfectly
+
+---
+
 ## 📊 PlaceholderAPI
 
 Available placeholders when PlaceholderAPI is installed:
@@ -577,11 +676,13 @@ limitations under the License.
 
 ## 🔮 Roadmap
 
-### Recently Added (v0.1.0)
+### Recently Added (v0.1.0 - World Generation Update)
+- ✅ **Custom world generator** - Ring-based biome distribution
+- ✅ **Biome-weighted storm spawning** - Storms prefer thematic biomes per zone
 - ✅ Multiple simultaneous storms (erratic spawning)
 - ✅ Damage ramp-up system
 - ✅ Border-based storm spawning
-- ✅ squaremap support
+- ✅ squaremap + BlueMap support
 - ✅ Variable storm movement speeds
 - ✅ Multi-storm tracking UI
 

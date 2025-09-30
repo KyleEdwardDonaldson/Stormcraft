@@ -127,4 +127,6 @@ ENV/
 *.properties.bak
 
 # Context file (development notes)
-STORMCRAFT_CONTEXT.md
+STORMCRAFT_CONTEXT.mdBlueMapAPI/
+nul
+server-configs/

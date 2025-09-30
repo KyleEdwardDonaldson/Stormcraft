@@ -2,6 +2,8 @@ package dev.ked.stormcraft.integration;
 
 import de.bluecolored.bluemap.api.BlueMapAPI;
 import de.bluecolored.bluemap.api.BlueMapMap;
+import de.bluecolored.bluemap.api.math.Color;
+import de.bluecolored.bluemap.api.math.Shape;
 import de.bluecolored.bluemap.api.markers.*;
 import dev.ked.stormcraft.StormcraftPlugin;
 import dev.ked.stormcraft.model.TravelingStorm;
@@ -9,7 +11,6 @@ import dev.ked.stormcraft.zones.ZoneManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
-import java.awt.Color;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -92,38 +93,46 @@ public class BluemapIntegration {
         // Remove existing circles if they exist
         removeZoneCircles();
 
-        // Note: BlueMap API has changed - we'll create simple POI markers instead of shapes
-        // since the Shape API requires complex vector math that may not be compatible
-
-        // Create Stormlands marker
-        POIMarker stormlandsMarker = POIMarker.builder()
-                .position(centerX, 64, centerZ)
+        // Create Stormlands circle (red)
+        Marker stormlandsCircle = ExtrudeMarker.builder()
                 .label("Stormlands (High Risk, High Reward)")
-                .icon("assets/poi.svg", 16, 16)
+                .shape(Shape.createCircle(centerX, centerZ, zoneManager.getStormlandsRadius(), 64), 64, 80)
+                .centerPosition()
+                .lineColor(new Color(255, 0, 0, 0.8f))
+                .fillColor(new Color(255, 0, 0, 0.15f))
+                .lineWidth(3)
                 .build();
 
-        zoneMarkers.put("stormlands", stormlandsMarker);
-        markerSet.getMarkers().put("stormlands_center", stormlandsMarker);
+        zoneMarkers.put("stormlands", stormlandsCircle);
+        markerSet.put("stormlands_circle", stormlandsCircle);
 
-        // Create Storm Zone marker
-        POIMarker stormZoneMarker = POIMarker.builder()
-                .position(centerX, 64, centerZ)
+        // Create Storm Zone circle (orange)
+        Marker stormZoneCircle = ExtrudeMarker.builder()
                 .label("Storm Zone (Moderate Risk)")
-                .icon("assets/poi.svg", 16, 16)
+                .shape(Shape.createCircle(centerX, centerZ, zoneManager.getStormZoneRadius(), 64), 64, 80)
+                .centerPosition()
+                .lineColor(new Color(255, 165, 0, 0.8f))
+                .fillColor(new Color(255, 165, 0, 0.1f))
+                .lineWidth(2)
                 .build();
 
-        zoneMarkers.put("stormzone", stormZoneMarker);
-        markerSet.getMarkers().put("storm_zone_center", stormZoneMarker);
+        zoneMarkers.put("stormzone", stormZoneCircle);
+        markerSet.put("storm_zone_circle", stormZoneCircle);
 
-        // Create Safe Zone marker
-        POIMarker safeZoneMarker = POIMarker.builder()
-                .position(centerX, 64, centerZ)
+        // Create Safe Zone circle (green)
+        Marker safeZoneCircle = ExtrudeMarker.builder()
                 .label("Safe Zone (Low Storm Frequency)")
-                .icon("assets/poi.svg", 16, 16)
+                .shape(Shape.createCircle(centerX, centerZ, zoneManager.getSafeZoneRadius(), 64), 64, 80)
+                .centerPosition()
+                .lineColor(new Color(0, 255, 0, 0.8f))
+                .fillColor(new Color(0, 255, 0, 0.05f))
+                .lineWidth(2)
                 .build();
 
-        zoneMarkers.put("safezone", safeZoneMarker);
-        markerSet.getMarkers().put("safe_zone_center", safeZoneMarker);
+        zoneMarkers.put("safezone", safeZoneCircle);
+        markerSet.put("safe_zone_circle", safeZoneCircle);
+
+        plugin.getLogger().info("Created BlueMap zone circles");
     }
 
     /**
@@ -132,9 +141,9 @@ public class BluemapIntegration {
     private void removeZoneCircles() {
         if (markerSet == null) return;
 
-        markerSet.getMarkers().remove("stormlands_center");
-        markerSet.getMarkers().remove("storm_zone_center");
-        markerSet.getMarkers().remove("safe_zone_center");
+        markerSet.remove("stormlands_circle");
+        markerSet.remove("storm_zone_circle");
+        markerSet.remove("safe_zone_circle");
         zoneMarkers.clear();
     }
 
@@ -152,7 +161,7 @@ public class BluemapIntegration {
         removeStormMarker();
 
         // Create storm center marker (POI)
-        POIMarker stormMarker = POIMarker.builder()
+        POIMarker stormCenterMarker = POIMarker.builder()
                 .position(loc.getX(), loc.getY(), loc.getZ())
                 .label(String.format(
                     "%s Storm - %ds remaining - %.1f HP/s",
@@ -163,8 +172,26 @@ public class BluemapIntegration {
                 .icon("assets/poi.svg", 16, 16)
                 .build();
 
-        stormMarkers.put("poi", stormMarker);
-        markerSet.getMarkers().put("active_storm", stormMarker);
+        stormMarkers.put("center", stormCenterMarker);
+        markerSet.put("active_storm_center", stormCenterMarker);
+
+        // Create storm damage radius circle (purple)
+        // Get damage radius from config (default 50.0)
+        double damageRadius = plugin.getConfigManager() != null
+            ? plugin.getConfigManager().getStormDamageRadius()
+            : 50.0;
+
+        Marker stormCircle = ExtrudeMarker.builder()
+                .label(String.format("%s Storm Radius", storm.getProfile().getType().name()))
+                .shape(Shape.createCircle(loc.getX(), loc.getZ(), damageRadius, 32), (float) loc.getY(), (float) loc.getY() + 10)
+                .centerPosition()
+                .lineColor(new Color(128, 0, 128, 1.0f))
+                .fillColor(new Color(128, 0, 128, 0.2f))
+                .lineWidth(3)
+                .build();
+
+        stormMarkers.put("radius", stormCircle);
+        markerSet.put("active_storm_radius", stormCircle);
     }
 
     /**
@@ -173,7 +200,8 @@ public class BluemapIntegration {
     public void removeStormMarker() {
         if (markerSet == null) return;
 
-        markerSet.getMarkers().remove("active_storm");
+        markerSet.remove("active_storm_center");
+        markerSet.remove("active_storm_radius");
         stormMarkers.clear();
     }
 

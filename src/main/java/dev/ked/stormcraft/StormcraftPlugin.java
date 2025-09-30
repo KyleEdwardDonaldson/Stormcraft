@@ -13,9 +13,11 @@ import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.listener.WeatherControlListener;
 import dev.ked.stormcraft.schedule.StormManager;
+import dev.ked.stormcraft.worldgen.StormcraftWorldGenerator;
 import dev.ked.stormcraft.zones.ZoneManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -68,14 +70,28 @@ public class StormcraftPlugin extends JavaPlugin {
             getLogger().info("Dynmap visualization enabled.");
         }
 
-        squaremapIntegration = new SquaremapIntegration(this, zoneManager);
-        if (squaremapIntegration.initialize()) {
-            getLogger().info("squaremap visualization enabled.");
+        // Only create squaremap integration if plugin is present
+        if (Bukkit.getPluginManager().getPlugin("squaremap") != null) {
+            try {
+                squaremapIntegration = new SquaremapIntegration(this, zoneManager);
+                if (squaremapIntegration.initialize()) {
+                    getLogger().info("squaremap visualization enabled.");
+                }
+            } catch (NoClassDefFoundError e) {
+                getLogger().warning("squaremap plugin found but API not available: " + e.getMessage());
+            }
         }
 
-        bluemapIntegration = new BluemapIntegration(this, zoneManager);
-        if (bluemapIntegration.initialize()) {
-            getLogger().info("BlueMap visualization enabled.");
+        // Only create BlueMap integration if plugin is present
+        if (Bukkit.getPluginManager().getPlugin("BlueMap") != null) {
+            try {
+                bluemapIntegration = new BluemapIntegration(this, zoneManager);
+                if (bluemapIntegration.initialize()) {
+                    getLogger().info("BlueMap visualization enabled.");
+                }
+            } catch (NoClassDefFoundError e) {
+                getLogger().warning("BlueMap plugin found but API not available: " + e.getMessage());
+            }
         }
 
         // Create map integration manager
@@ -239,5 +255,11 @@ public class StormcraftPlugin extends JavaPlugin {
 
     public WorldGuardIntegration getWorldGuardIntegration() {
         return worldGuardIntegration;
+    }
+
+    @Override
+    public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
+        getLogger().info("Providing Stormcraft world generator for world: " + worldName);
+        return new StormcraftWorldGenerator(this);
     }
 }

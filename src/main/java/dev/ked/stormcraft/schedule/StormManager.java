@@ -265,7 +265,17 @@ public class StormManager {
 
         if (useTravelingStorm) {
             // Use traveling storm system
-            World world = Bukkit.getWorld(config.getEnabledWorlds().get(0));
+            World world = null;
+            if (!config.getEnabledWorlds().isEmpty()) {
+                world = Bukkit.getWorld(config.getEnabledWorlds().get(0));
+            }
+
+            // Fallback to default world if configured world not found
+            if (world == null) {
+                world = Bukkit.getWorlds().get(0);
+                plugin.getLogger().warning("Configured world not found for storm spawn. Using default world: " + world.getName());
+            }
+
             travelingStormManager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
             travelingStormManager.startTravelingStorm(upcomingProfile, actualDuration, actualDamage, world, this::endStorm);
             travelingStorm = travelingStormManager.getActiveStorm();
@@ -333,10 +343,21 @@ public class StormManager {
      */
     private void spawnStormBurst() {
         int burstSize = selectWeightedBurstSize();
-        World world = Bukkit.getWorld(config.getEnabledWorlds().get(0));
+
+        // Get world with null check
+        World world = null;
+        if (!config.getEnabledWorlds().isEmpty()) {
+            world = Bukkit.getWorld(config.getEnabledWorlds().get(0));
+        }
+
+        // Fallback to default world if configured world not found
+        if (world == null) {
+            world = Bukkit.getWorlds().get(0); // Default world
+            plugin.getLogger().warning("Configured world not found for storm spawn. Using default world: " + world.getName());
+        }
 
         if (config.isLogScheduling()) {
-            plugin.getLogger().info("Spawning storm burst: " + burstSize + " storms");
+            plugin.getLogger().info("Spawning storm burst: " + burstSize + " storms in world: " + world.getName());
         }
 
         for (int i = 0; i < burstSize; i++) {

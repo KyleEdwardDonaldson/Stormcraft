@@ -10,6 +10,9 @@ description: >
 
 load: POSTWORLD
 
+# Custom world generator - use with: /mv create <world> normal -g Stormcraft
+generator: StormcraftWorldGenerator
+
 softdepend:
   - PlaceholderAPI
   - WorldGuard
