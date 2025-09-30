@@ -26,6 +26,7 @@ public class BlockDamageTask extends BukkitRunnable {
     private final Random random = new Random();
 
     private TravelingStorm activeStorm;
+    private List<TravelingStorm> activeStorms = new ArrayList<>();
 
     // Block degradation chains (block -> degraded version)
     private static final Map<Material, Material> DEGRADATION_MAP = new HashMap<>();
@@ -127,8 +128,19 @@ public class BlockDamageTask extends BukkitRunnable {
         this.activeStorm = storm;
     }
 
+    public void setActiveStorms(List<TravelingStorm> storms) {
+        this.activeStorms = storms;
+    }
+
     @Override
     public void run() {
+        // Multi-storm system
+        if (!activeStorms.isEmpty()) {
+            runMultiStormBlockDamage();
+            return;
+        }
+
+        // Single storm system (legacy)
         if (activeStorm == null || !config.isBlockDamageEnabled()) {
             return;
         }
@@ -179,6 +191,82 @@ public class BlockDamageTask extends BukkitRunnable {
         if (config.isLogScheduling() && blocksDamaged > 0) {
             plugin.getLogger().info("Storm damaged " + blocksDamaged + " blocks (checked " + blocksChecked + ")");
         }
+    }
+
+    /**
+     * Handles block damage for multiple simultaneous storms.
+     */
+    private void runMultiStormBlockDamage() {
+        if (!config.isBlockDamageEnabled()) {
+            return;
+        }
+
+        int blocksChecked = 0;
+        int blocksDamaged = 0;
+        int maxChecksPerTick = config.getBlockDamageMaxChecksPerTick();
+        double damageRadius = config.getStormDamageRadius();
+
+        // Collect all affected chunks from all storms
+        Set<Chunk> affectedChunks = new HashSet<>();
+        for (TravelingStorm storm : activeStorms) {
+            Location stormCenter = storm.getCurrentLocation();
+
+            // Only damage blocks in Stormlands
+            if (zoneManager.isInStormlands(stormCenter)) {
+                affectedChunks.addAll(getChunksInRadius(stormCenter, damageRadius));
+            }
+        }
+
+        // Randomly sample blocks from affected chunks
+        for (Chunk chunk : affectedChunks) {
+            if (blocksChecked >= maxChecksPerTick) {
+                break;
+            }
+
+            // Sample a few random blocks from this chunk
+            for (int i = 0; i < 5; i++) {
+                if (blocksChecked >= maxChecksPerTick) {
+                    break;
+                }
+
+                Block block = getRandomBlockInChunk(chunk);
+                blocksChecked++;
+
+                // Check if block is in any storm's radius
+                TravelingStorm closestStorm = findClosestStorm(block.getLocation());
+                if (closestStorm != null && canDamageBlock(block, closestStorm.getCurrentLocation(), damageRadius)) {
+                    if (attemptBlockDamage(block)) {
+                        blocksDamaged++;
+                    }
+                }
+            }
+        }
+
+        if (config.isLogScheduling() && blocksDamaged > 0) {
+            plugin.getLogger().info("Storms damaged " + blocksDamaged + " blocks (checked " + blocksChecked + ")");
+        }
+    }
+
+    /**
+     * Finds the closest storm to a location that is within damage radius.
+     */
+    private TravelingStorm findClosestStorm(Location location) {
+        TravelingStorm closest = null;
+        double closestDistance = Double.MAX_VALUE;
+        double damageRadius = config.getStormDamageRadius();
+
+        for (TravelingStorm storm : activeStorms) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(location.getWorld())) {
+                double distance = location.distance(stormLoc);
+                if (distance <= damageRadius && distance < closestDistance) {
+                    closestDistance = distance;
+                    closest = storm;
+                }
+            }
+        }
+
+        return closest;
     }
 
     /**

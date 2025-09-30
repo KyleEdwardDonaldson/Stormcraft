@@ -24,6 +24,7 @@ public class StormDropsManager extends BukkitRunnable {
     private final Random random = new Random();
 
     private TravelingStorm activeStorm;
+    private List<TravelingStorm> activeStorms = new ArrayList<>();
 
     // Loot tables for different storm types
     private static final Map<Material, Integer> COMMON_DROPS = new HashMap<>();
@@ -67,8 +68,19 @@ public class StormDropsManager extends BukkitRunnable {
         this.activeStorm = storm;
     }
 
+    public void setActiveStorms(List<TravelingStorm> storms) {
+        this.activeStorms = storms;
+    }
+
     @Override
     public void run() {
+        // Multi-storm system
+        if (!activeStorms.isEmpty()) {
+            runMultiStormDrops();
+            return;
+        }
+
+        // Single storm system (legacy)
         if (activeStorm == null || !config.isStormDropsEnabled()) {
             return;
         }
@@ -111,6 +123,59 @@ public class StormDropsManager extends BukkitRunnable {
                 plugin.getLogger().info("Storm dropped " + drop.getType() + " x" + drop.getAmount() +
                                       " at (" + (int)dropLocation.getX() + ", " +
                                       (int)dropLocation.getY() + ", " + (int)dropLocation.getZ() + ")");
+            }
+        }
+    }
+
+    /**
+     * Handles storm drops for multiple simultaneous storms.
+     */
+    private void runMultiStormDrops() {
+        if (!config.isStormDropsEnabled()) {
+            return;
+        }
+
+        // Check each storm for potential drops
+        for (TravelingStorm storm : activeStorms) {
+            Location stormCenter = storm.getCurrentLocation();
+            World world = stormCenter.getWorld();
+
+            if (world == null) {
+                continue;
+            }
+
+            // Only spawn drops in Stormlands or Storm Zone
+            ZoneManager.ZoneType zone = zoneManager.getZoneAt(stormCenter);
+            if (zone == ZoneManager.ZoneType.SAFE_ZONE) {
+                continue;
+            }
+
+            // Determine drop chance based on zone
+            double dropChance = switch (zone) {
+                case STORMLANDS -> config.getStormDropChanceStormlands();
+                case STORM_ZONE -> config.getStormDropChanceStormZone();
+                default -> 0.0;
+            };
+
+            // Roll for drop
+            if (random.nextDouble() >= dropChance) {
+                continue;
+            }
+
+            // Spawn a drop at a random location within the storm
+            Location dropLocation = getRandomLocationInStorm(stormCenter, config.getStormDamageRadius());
+
+            // Determine drop rarity based on zone and storm type
+            ItemStack drop = selectRandomDrop(zone, storm.getProfile().getType());
+
+            if (drop != null) {
+                spawnDrop(dropLocation, drop);
+
+                if (config.isLogScheduling()) {
+                    plugin.getLogger().info("Storm dropped " + drop.getType() + " x" + drop.getAmount() +
+                                          " at (" + (int)dropLocation.getX() + ", " +
+                                          (int)dropLocation.getY() + ", " + (int)dropLocation.getZ() + ")");
+                }
             }
         }
     }

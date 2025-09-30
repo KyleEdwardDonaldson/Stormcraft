@@ -31,7 +31,14 @@ public class StormsCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        // Check for traveling storm
+        // Check for multiple active storms first
+        java.util.List<TravelingStorm> activeStorms = stormManager.getActiveStorms();
+        if (!activeStorms.isEmpty()) {
+            showMultipleStorms(sender, activeStorms);
+            return true;
+        }
+
+        // Check for traveling storm (legacy single storm)
         TravelingStorm travelingStorm = stormManager.getTravelingStorm();
         ActiveStorm activeStorm = stormManager.getActiveStorm();
 
@@ -63,8 +70,51 @@ public class StormsCommand implements CommandExecutor {
         return true;
     }
 
+    /**
+     * Shows information about multiple active storms.
+     */
+    private void showMultipleStorms(CommandSender sender, java.util.List<TravelingStorm> storms) {
+        // Header
+        sender.sendMessage(Component.text("════ ", NamedTextColor.DARK_GRAY)
+                .append(Component.text("Active Storms", NamedTextColor.GOLD, TextDecoration.BOLD))
+                .append(Component.text(" (" + storms.size() + " total)", NamedTextColor.GRAY))
+                .append(Component.text(" ════", NamedTextColor.DARK_GRAY)));
+
+        // Sort storms by distance if sender is a player
+        java.util.List<TravelingStorm> sortedStorms = new java.util.ArrayList<>(storms);
+        if (sender instanceof Player player) {
+            sortedStorms.sort((s1, s2) -> {
+                Location loc1 = s1.getCurrentLocation();
+                Location loc2 = s2.getCurrentLocation();
+                if (!loc1.getWorld().equals(player.getWorld())) return 1;
+                if (!loc2.getWorld().equals(player.getWorld())) return -1;
+                double dist1 = player.getLocation().distance(loc1);
+                double dist2 = player.getLocation().distance(loc2);
+                return Double.compare(dist1, dist2);
+            });
+        }
+
+        // Show each storm
+        for (int i = 0; i < sortedStorms.size(); i++) {
+            TravelingStorm storm = sortedStorms.get(i);
+            showTravelingStorm(sender, storm, i + 1);
+            if (i < sortedStorms.size() - 1) {
+                sender.sendMessage(Component.empty());
+            }
+        }
+    }
+
     private void showTravelingStorm(CommandSender sender, TravelingStorm storm) {
-        Component message = Component.text("⛈ ", NamedTextColor.YELLOW)
+        showTravelingStorm(sender, storm, 0);
+    }
+
+    private void showTravelingStorm(CommandSender sender, TravelingStorm storm, int number) {
+        Component prefix = number > 0 ?
+            Component.text("#" + number + " ", NamedTextColor.DARK_GRAY) :
+            Component.empty();
+
+        Component message = prefix
+                .append(Component.text("⛈ ", NamedTextColor.YELLOW))
                 .append(Component.text("Traveling Storm", NamedTextColor.WHITE, TextDecoration.BOLD))
                 .append(Component.newline())
                 .append(Component.text("  Type: ", NamedTextColor.GRAY))
@@ -74,7 +124,7 @@ public class StormsCommand implements CommandExecutor {
                 .append(Component.text(formatTime(storm.getRemainingSeconds()), NamedTextColor.YELLOW))
                 .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
                 .append(Component.text("Damage: ", NamedTextColor.GRAY))
-                .append(Component.text(String.format("%.1f HP/s", storm.getActualDamagePerSecond()), NamedTextColor.RED));
+                .append(Component.text(String.format("%.1f HP/s", storm.getCurrentDamagePerSecond()), NamedTextColor.RED));
 
         // Add location info
         Location loc = storm.getCurrentLocation();

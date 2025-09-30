@@ -2,7 +2,7 @@ package dev.ked.stormcraft.schedule;
 
 import dev.ked.stormcraft.StormcraftPlugin;
 import dev.ked.stormcraft.config.ConfigManager;
-import dev.ked.stormcraft.integration.DynmapIntegration;
+import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.model.StormProfile;
 import dev.ked.stormcraft.model.TravelingStorm;
 import dev.ked.stormcraft.zones.ZoneManager;
@@ -21,18 +21,18 @@ public class TravelingStormManager extends BukkitRunnable {
     private final StormcraftPlugin plugin;
     private final ConfigManager config;
     private final ZoneManager zoneManager;
-    private final DynmapIntegration dynmapIntegration;
+    private final MapIntegrationManager mapIntegrationManager;
     private final Random random = new Random();
 
     private TravelingStorm activeStorm;
     private Runnable onStormEndCallback;
 
     public TravelingStormManager(StormcraftPlugin plugin, ConfigManager config,
-                                ZoneManager zoneManager, DynmapIntegration dynmapIntegration) {
+                                ZoneManager zoneManager, MapIntegrationManager mapIntegrationManager) {
         this.plugin = plugin;
         this.config = config;
         this.zoneManager = zoneManager;
-        this.dynmapIntegration = dynmapIntegration;
+        this.mapIntegrationManager = mapIntegrationManager;
     }
 
     /**
@@ -73,9 +73,9 @@ public class TravelingStormManager extends BukkitRunnable {
         // Start movement task (runs every second)
         this.runTaskTimer(plugin, 0L, 20L);
 
-        // Update Dynmap marker
-        if (dynmapIntegration != null && dynmapIntegration.isEnabled()) {
-            dynmapIntegration.updateStormMarker(activeStorm);
+        // Update map markers
+        if (mapIntegrationManager != null) {
+            mapIntegrationManager.updateStormMarker(activeStorm);
         }
 
         if (config.isLogScheduling()) {
@@ -98,9 +98,9 @@ public class TravelingStormManager extends BukkitRunnable {
         // Move storm toward target
         activeStorm.move(1.0); // Move based on 1 second elapsed
 
-        // Update Dynmap marker
-        if (dynmapIntegration != null && dynmapIntegration.isEnabled()) {
-            dynmapIntegration.updateStormMarker(activeStorm);
+        // Update map markers
+        if (mapIntegrationManager != null) {
+            mapIntegrationManager.updateStormMarker(activeStorm);
         }
 
         // Check if storm expired
@@ -123,9 +123,9 @@ public class TravelingStormManager extends BukkitRunnable {
                                   (int)activeStorm.getCurrentLocation().getZ() + ")");
         }
 
-        // Remove Dynmap marker
-        if (dynmapIntegration != null && dynmapIntegration.isEnabled()) {
-            dynmapIntegration.removeStormMarker();
+        // Remove map markers
+        if (mapIntegrationManager != null) {
+            mapIntegrationManager.removeStormMarker();
         }
 
         activeStorm = null;

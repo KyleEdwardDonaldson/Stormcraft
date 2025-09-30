@@ -39,6 +39,7 @@ public class DamageTask extends BukkitRunnable {
 
     private ActiveStorm activeStorm;
     private TravelingStorm travelingStorm;
+    private List<TravelingStorm> activeStorms = new ArrayList<>();
 
     public DamageTask(StormcraftPlugin plugin, ConfigManager config,
                      PlayerExposureUtil exposureUtil, WorldGuardIntegration worldGuardIntegration,
@@ -59,8 +60,18 @@ public class DamageTask extends BukkitRunnable {
         this.travelingStorm = travelingStorm;
     }
 
+    public void setActiveStorms(List<TravelingStorm> storms) {
+        this.activeStorms = storms;
+    }
+
     @Override
     public void run() {
+        // Multi-storm system (erratic spawning)
+        if (!activeStorms.isEmpty()) {
+            runMultiStormCheck();
+            return;
+        }
+
         // Support both ActiveStorm (old) and TravelingStorm (new) systems
         if (activeStorm == null && travelingStorm == null) {
             return;
@@ -111,6 +122,146 @@ public class DamageTask extends BukkitRunnable {
             plugin.getLogger().info("Exposed players (" + exposedPlayers.size() + "): " +
                     String.join(", ", exposedPlayers.stream().map(Player::getName).toList()));
         }
+    }
+
+    /**
+     * Handles damage checks for multiple simultaneous storms.
+     */
+    private void runMultiStormCheck() {
+        List<Player> exposedPlayers = new ArrayList<>();
+
+        // Check all online players against all active storms
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            TravelingStorm closestStorm = findClosestStormToPlayer(player);
+            if (closestStorm != null && isPlayerExposedToMultiStorm(player, closestStorm)) {
+                exposedPlayers.add(player);
+
+                // Apply effects from the closest storm
+                applyStormEffects(player, closestStorm.getProfile(), closestStorm.getCurrentDamagePerSecond());
+                awardEssence(player, closestStorm.getProfile());
+            }
+        }
+
+        // Apply damage to exposed mobs
+        for (String worldName : config.getEnabledWorlds()) {
+            World world = Bukkit.getWorld(worldName);
+            if (world != null) {
+                for (LivingEntity entity : world.getLivingEntities()) {
+                    if (!(entity instanceof Player)) {
+                        TravelingStorm closestStorm = findClosestStormToLocation(entity.getLocation());
+                        if (closestStorm != null && isEntityExposedToMultiStorm(entity, closestStorm)) {
+                            applyMobDamage(entity, closestStorm.getCurrentDamagePerSecond());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Log exposure samples if enabled
+        if (config.isLogExposureSamples() && !exposedPlayers.isEmpty()) {
+            plugin.getLogger().info("Exposed players (" + exposedPlayers.size() + "): " +
+                    String.join(", ", exposedPlayers.stream().map(Player::getName).toList()));
+        }
+    }
+
+    /**
+     * Finds the closest storm to a player.
+     */
+    private TravelingStorm findClosestStormToPlayer(Player player) {
+        TravelingStorm closest = null;
+        double closestDistance = Double.MAX_VALUE;
+
+        for (TravelingStorm storm : activeStorms) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(player.getWorld())) {
+                double distance = player.getLocation().distance(stormLoc);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closest = storm;
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    /**
+     * Finds the closest storm to a location.
+     */
+    private TravelingStorm findClosestStormToLocation(Location location) {
+        TravelingStorm closest = null;
+        double closestDistance = Double.MAX_VALUE;
+
+        for (TravelingStorm storm : activeStorms) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(location.getWorld())) {
+                double distance = location.distance(stormLoc);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closest = storm;
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    /**
+     * Checks if a player is exposed to a specific storm in multi-storm mode.
+     */
+    private boolean isPlayerExposedToMultiStorm(Player player, TravelingStorm storm) {
+        Location playerLoc = player.getLocation();
+
+        // Check if player is within storm radius
+        if (!storm.isLocationInStorm(playerLoc, config.getStormDamageRadius())) {
+            return false;
+        }
+
+        // Basic exposure check (sky access)
+        boolean exposed = exposureUtil.isPlayerExposed(player);
+        if (!exposed) {
+            return false;
+        }
+
+        // Check WorldGuard protection if enabled
+        if (worldGuardIntegration != null && worldGuardIntegration.isEnabled()) {
+            if (worldGuardIntegration.isInProtectedRegion(playerLoc)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks if an entity is exposed to a specific storm in multi-storm mode.
+     */
+    private boolean isEntityExposedToMultiStorm(LivingEntity entity, TravelingStorm storm) {
+        Location loc = entity.getLocation();
+        World world = loc.getWorld();
+
+        // Check if in enabled world
+        if (world == null || !config.getEnabledWorlds().contains(world.getName())) {
+            return false;
+        }
+
+        // Check if entity is within storm radius
+        if (!storm.isLocationInStorm(loc, config.getStormDamageRadius())) {
+            return false;
+        }
+
+        // Quick check: compare entity Y to highest block Y
+        int highestBlockY = world.getHighestBlockYAt(loc);
+        int entityY = loc.getBlockY();
+        int minDepth = config.getIgnoreIfUnderBlocksMinDepth();
+
+        // If entity is below the highest block by at least minDepth, check if they have overhead protection
+        if (highestBlockY - entityY >= minDepth) {
+            return !hasBlocksOverheadEntity(entity, minDepth);
+        }
+
+        // Entity is at or near surface level = exposed
+        return true;
     }
 
     /**

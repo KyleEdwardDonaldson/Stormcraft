@@ -52,15 +52,18 @@ Transform your world with three risk/reward zones:
   - Mostly weak storms
 
 #### **Traveling Storms**
-- Storms spawn at random locations and move toward Stormlands center
+- **Erratic multi-storm spawning** - 1-6 storms can spawn at once!
+- Storms spawn at the border between Storm Zone and Safe Zone
 - **Variable movement speeds** per storm type (0.03 - 2.0 blocks/second)
   - Fast-moving weak storms (pass in ~2 minutes)
   - Slow-moving medium storms (pass in 2-5 minutes)
   - Very slow dangerous storms (pass in 4-30 minutes!)
+- **Damage ramp-up** - Storms build from 0 to full damage over 60 seconds
+- Storms move toward Stormlands center
 - Visible damage radius on map
-- **ActionBar/BossBar storm tracker** shows distance and direction
-- Real-time tracking on Dynmap
-- Use `/storm` to check distance anytime
+- **ActionBar/BossBar storm tracker** shows closest storm distance and direction
+- Real-time tracking on Dynmap, squaremap, and BlueMap
+- Use `/storm` to check closest storm, `/storms` to list all
 
 #### **Block Damage System**
 - Buildings degrade during storms in Stormlands
@@ -87,6 +90,8 @@ Transform your world with three risk/reward zones:
 - **WorldGuard** - Respect protected regions
 - **Vault** - Economy/permissions support
 - **Dynmap** - Visualize zones and storms on web map
+- **squaremap** - Modern map visualization support
+- **BlueMap** - 3D web map visualization
 
 ---
 
@@ -101,6 +106,8 @@ Transform your world with three risk/reward zones:
    - PlaceholderAPI (for placeholders)
    - WorldGuard (for region protection)
    - Dynmap (for map visualization)
+   - squaremap (for modern map visualization)
+   - BlueMap (for 3D map visualization)
 
 3. **Install:**
    - Place `stormcraft-0.1.0.jar` in your `plugins` folder
@@ -192,6 +199,32 @@ travelingStorms:
   enabled: false
   damageRadius: 50.0      # Damage area around storm
   # Movement speed is per storm type (see damageProfiles above)
+
+  # Erratic burst spawning (1-6 storms at once!)
+  erraticSpawning:
+    enabled: true
+    minBurstSize: 1
+    maxBurstSize: 6
+    minDelaySeconds: 180   # 3 minutes
+    maxDelaySeconds: 900   # 15 minutes
+    burstChanceWeights:
+      1: 0.40  # 40% chance of 1 storm
+      2: 0.25  # 25% chance of 2 storms
+      3: 0.15  # etc.
+      4: 0.10
+      5: 0.07
+      6: 0.03
+
+  # Spawn at border between Storm Zone and Safe Zone
+  spawnLocation:
+    spawnAtBorder: true
+    borderBias: 0.7        # 0.7 = 70% toward Storm Zone
+    borderSpread: 500      # +/- 500 blocks from border
+
+  # Damage ramp-up (0 to full over time)
+  damageRampUp:
+    enabled: true
+    rampUpSeconds: 60      # 1 minute to reach full damage
 
 # Storm Tracker UI (for traveling storms)
 stormTracker:
@@ -359,22 +392,39 @@ With 1000 block range and 50 block damage radius:
 
 ---
 
-## 🗺️ Dynmap Setup
+## 🗺️ Map Integration Setup
 
-1. **Install Dynmap** plugin (download from SpigotMC)
+Stormcraft supports **Dynmap**, **squaremap**, and **BlueMap** for visualizing zones and active storms.
+
+### Setup (All Maps)
+
+1. **Install your preferred map plugin:**
+   - [Dynmap](https://www.spigotmc.org/resources/dynmap.274/) (SpigotMC)
+   - [squaremap](https://github.com/jpenilla/squaremap) (GitHub)
+   - [BlueMap](https://www.spigotmc.org/resources/bluemap.83557/) (SpigotMC)
+
 2. **Enable zones** in Stormcraft config:
    ```yaml
    zones:
      enabled: true
    ```
-3. **Restart server**
-4. **Access Dynmap** at `http://storm.quetzal.games:8123`
 
-**What you'll see:**
+3. **Restart server**
+
+4. **Access your map** (default ports):
+   - Dynmap: `http://your-server:8123`
+   - squaremap: `http://your-server:8080`
+
+### What You'll See
+
+**All maps show:**
 - 🔴 Red circle = Stormlands (high danger)
 - 🟠 Orange circle = Storm Zone
 - 🟢 Green circle = Safe Zone
-- 🟣 Purple marker = Active storm location (when traveling storms enabled)
+- 🟣 Purple markers = Active storm locations with damage radius
+
+**Multiple Storms:**
+When using erratic spawning, you'll see up to 6 simultaneous storms on the map, each with their own damage radius circles.
 
 ---
 
@@ -471,11 +521,12 @@ Output: `target/stormcraft-0.1.0.jar`
 - Ensure `ignoreIfUnderBlocksMinDepth: 1` is correct
 - Check WorldGuard regions aren't interfering
 
-**Zones not appearing on Dynmap:**
-- Verify Dynmap is installed
+**Zones not appearing on map:**
+- Verify your map plugin (Dynmap/squaremap) is installed
 - Check `zones.enabled: true`
 - Restart server after config changes
-- Check console for Dynmap initialization errors
+- Check console for map integration initialization messages
+- Try both map plugins - at least one should work!
 
 **Storms not starting:**
 - Check enabled worlds list
@@ -526,6 +577,15 @@ limitations under the License.
 
 ## 🔮 Roadmap
 
+### Recently Added (v0.1.0)
+- ✅ Multiple simultaneous storms (erratic spawning)
+- ✅ Damage ramp-up system
+- ✅ Border-based storm spawning
+- ✅ squaremap support
+- ✅ Variable storm movement speeds
+- ✅ Multi-storm tracking UI
+
+### Future Features
 Future features under consideration:
 - Storm severity progression over time
 - Seasonal weather patterns

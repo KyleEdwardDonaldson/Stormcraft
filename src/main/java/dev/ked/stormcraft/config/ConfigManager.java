@@ -254,11 +254,11 @@ public class ConfigManager {
 
                 // Load burst chance weights
                 burstChanceWeights = new HashMap<>();
-                ConfigurationSection weightsSection = erraticSection.getConfigurationSection("burstChanceWeights");
-                if (weightsSection != null) {
-                    for (String key : weightsSection.getKeys(false)) {
+                ConfigurationSection burstWeightsSection = erraticSection.getConfigurationSection("burstChanceWeights");
+                if (burstWeightsSection != null) {
+                    for (String key : burstWeightsSection.getKeys(false)) {
                         int burstSize = Integer.parseInt(key);
-                        double weight = weightsSection.getDouble(key);
+                        double weight = burstWeightsSection.getDouble(key);
                         burstChanceWeights.put(burstSize, weight);
                     }
                 }

@@ -4,8 +4,11 @@ import dev.ked.stormcraft.command.StormcraftCommand;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.config.PersistenceManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
+import dev.ked.stormcraft.integration.BluemapIntegration;
 import dev.ked.stormcraft.integration.DynmapIntegration;
+import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.integration.PlaceholderAPIIntegration;
+import dev.ked.stormcraft.integration.SquaremapIntegration;
 import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.listener.WeatherControlListener;
@@ -27,6 +30,8 @@ public class StormcraftPlugin extends JavaPlugin {
     private VaultIntegration vaultIntegration;
     private ZoneManager zoneManager;
     private DynmapIntegration dynmapIntegration;
+    private SquaremapIntegration squaremapIntegration;
+    private BluemapIntegration bluemapIntegration;
     private PlayerExposureUtil exposureUtil;
     private StormManager stormManager;
     private PlaceholderAPIIntegration placeholderAPIIntegration;
@@ -57,16 +62,31 @@ public class StormcraftPlugin extends JavaPlugin {
             getLogger().info("Zone system enabled: Stormlands, Storm Zone, Safe Zone");
         }
 
-        // Initialize Dynmap integration
+        // Initialize map integrations
         dynmapIntegration = new DynmapIntegration(this, zoneManager);
         if (dynmapIntegration.initialize()) {
             getLogger().info("Dynmap visualization enabled.");
         }
 
+        squaremapIntegration = new SquaremapIntegration(this, zoneManager);
+        if (squaremapIntegration.initialize()) {
+            getLogger().info("squaremap visualization enabled.");
+        }
+
+        bluemapIntegration = new BluemapIntegration(this, zoneManager);
+        if (bluemapIntegration.initialize()) {
+            getLogger().info("BlueMap visualization enabled.");
+        }
+
+        // Create map integration manager
+        MapIntegrationManager mapIntegrationManager = new MapIntegrationManager(
+            dynmapIntegration, squaremapIntegration, bluemapIntegration
+        );
+
         // Initialize core systems
         exposureUtil = new PlayerExposureUtil(this, configManager);
         stormManager = new StormManager(this, configManager, exposureUtil, worldGuardIntegration,
-                                       vaultIntegration, zoneManager, dynmapIntegration);
+                                       vaultIntegration, zoneManager, mapIntegrationManager);
 
         // Load saved state
         persistenceManager.loadState(stormManager);

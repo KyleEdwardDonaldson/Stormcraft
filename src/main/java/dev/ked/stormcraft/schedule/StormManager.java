@@ -6,7 +6,7 @@ import dev.ked.stormcraft.api.events.StormcraftStormEndEvent;
 import dev.ked.stormcraft.api.events.StormcraftStormStartEvent;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
-import dev.ked.stormcraft.integration.DynmapIntegration;
+import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.model.ActiveStorm;
@@ -22,9 +22,7 @@ import org.bukkit.World;
 import org.bukkit.WeatherType;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -37,21 +35,24 @@ public class StormManager {
     private final WorldGuardIntegration worldGuardIntegration;
     private final VaultIntegration vaultIntegration;
     private final ZoneManager zoneManager;
-    private final DynmapIntegration dynmapIntegration;
+    private final MapIntegrationManager mapIntegrationManager;
     private final Random random = new Random();
 
     // Storm state
     private StormPhase currentPhase = StormPhase.IDLE;
     private long nextStormTimeMillis = 0;
+    private long nextBurstTimeMillis = 0; // For erratic spawning
     private ActiveStorm activeStorm = null;
-    private TravelingStorm travelingStorm = null;
+    private TravelingStorm travelingStorm = null; // Legacy single storm support
+    private List<TravelingStorm> activeStorms = new ArrayList<>(); // Multiple storms
     private StormProfile upcomingProfile = null;
 
     // Tasks
     private BukkitTask scheduleCheckTask;
     private CountdownTask countdownTask;
     private DamageTask damageTask;
-    private TravelingStormManager travelingStormManager;
+    private TravelingStormManager travelingStormManager; // Legacy single storm
+    private List<TravelingStormManager> activeStormManagers = new ArrayList<>(); // Multiple storms
     private BlockDamageTask blockDamageTask;
     private StormDropsManager stormDropsManager;
     private OreGenerationManager oreGenerationManager;
@@ -61,19 +62,24 @@ public class StormManager {
     public StormManager(StormcraftPlugin plugin, ConfigManager config,
                        PlayerExposureUtil exposureUtil, WorldGuardIntegration worldGuardIntegration,
                        VaultIntegration vaultIntegration, ZoneManager zoneManager,
-                       DynmapIntegration dynmapIntegration) {
+                       MapIntegrationManager mapIntegrationManager) {
         this.plugin = plugin;
         this.config = config;
         this.exposureUtil = exposureUtil;
         this.worldGuardIntegration = worldGuardIntegration;
         this.vaultIntegration = vaultIntegration;
         this.zoneManager = zoneManager;
-        this.dynmapIntegration = dynmapIntegration;
+        this.mapIntegrationManager = mapIntegrationManager;
     }
 
     public void start() {
         if (nextStormTimeMillis == 0) {
-            scheduleNextStorm();
+            // Initialize burst timing if erratic spawning enabled
+            if (config.isErraticSpawningEnabled() && config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+                scheduleNextBurst();
+            } else {
+                scheduleNextStorm();
+            }
         }
 
         // Start periodic check for storm scheduling (every 20 ticks = 1 second)
@@ -123,11 +129,22 @@ public class StormManager {
      * Checks if it's time to start a storm.
      */
     private void checkStormSchedule() {
+        long now = System.currentTimeMillis();
+
+        // Check for erratic burst spawning
+        if (config.isErraticSpawningEnabled() && config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            if (now >= nextBurstTimeMillis) {
+                spawnStormBurst();
+                scheduleNextBurst();
+            }
+            return;
+        }
+
+        // Traditional single storm spawning
         if (currentPhase != StormPhase.IDLE) {
             return;
         }
 
-        long now = System.currentTimeMillis();
         if (now >= nextStormTimeMillis) {
             startCountdown();
         }
@@ -146,6 +163,40 @@ public class StormManager {
         if (config.isLogScheduling()) {
             plugin.getLogger().info("Next storm scheduled in " + delaySeconds + "s");
         }
+    }
+
+    /**
+     * Schedules the next storm burst (for erratic spawning).
+     */
+    private void scheduleNextBurst() {
+        int minDelay = config.getMinBurstDelaySeconds();
+        int maxDelay = config.getMaxBurstDelaySeconds();
+        int delaySeconds = ThreadLocalRandom.current().nextInt(minDelay, maxDelay + 1);
+
+        nextBurstTimeMillis = System.currentTimeMillis() + (delaySeconds * 1000L);
+
+        if (config.isLogScheduling()) {
+            plugin.getLogger().info("Next storm burst scheduled in " + delaySeconds + "s");
+        }
+    }
+
+    /**
+     * Selects a burst size using weighted random selection.
+     */
+    private int selectWeightedBurstSize() {
+        Map<Integer, Double> weights = config.getBurstChanceWeights();
+        double totalWeight = weights.values().stream().mapToDouble(Double::doubleValue).sum();
+        double randomValue = random.nextDouble() * totalWeight;
+
+        double cumulative = 0.0;
+        for (Map.Entry<Integer, Double> entry : weights.entrySet()) {
+            cumulative += entry.getValue();
+            if (randomValue <= cumulative) {
+                return entry.getKey();
+            }
+        }
+
+        return config.getMinBurstSize(); // Fallback
     }
 
     /**
@@ -215,7 +266,7 @@ public class StormManager {
         if (useTravelingStorm) {
             // Use traveling storm system
             World world = Bukkit.getWorld(config.getEnabledWorlds().get(0));
-            travelingStormManager = new TravelingStormManager(plugin, config, zoneManager, dynmapIntegration);
+            travelingStormManager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
             travelingStormManager.startTravelingStorm(upcomingProfile, actualDuration, actualDamage, world, this::endStorm);
             travelingStorm = travelingStormManager.getActiveStorm();
         } else {
@@ -274,6 +325,125 @@ public class StormManager {
         if (config.isLogScheduling()) {
             plugin.getLogger().info("Storm active: " + upcomingProfile.getType() + ", " +
                     actualDuration + "s" + (useTravelingStorm ? " (traveling)" : ""));
+        }
+    }
+
+    /**
+     * Spawns a burst of traveling storms (erratic spawning mode).
+     */
+    private void spawnStormBurst() {
+        int burstSize = selectWeightedBurstSize();
+        World world = Bukkit.getWorld(config.getEnabledWorlds().get(0));
+
+        if (config.isLogScheduling()) {
+            plugin.getLogger().info("Spawning storm burst: " + burstSize + " storms");
+        }
+
+        for (int i = 0; i < burstSize; i++) {
+            StormProfile profile = selectRandomStormProfile();
+
+            // Randomize duration
+            int minDuration = profile.getMinDurationSeconds();
+            int maxDuration = profile.getMaxDurationSeconds();
+            int actualDuration = ThreadLocalRandom.current().nextInt(minDuration, maxDuration + 1);
+
+            // Randomize damage
+            double minDamage = profile.getMinDamagePerSecond();
+            double maxDamage = profile.getMaxDamagePerSecond();
+            double actualDamage = minDamage + (ThreadLocalRandom.current().nextDouble() * (maxDamage - minDamage));
+
+            // Create individual storm manager
+            TravelingStormManager manager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
+            manager.startTravelingStorm(profile, actualDuration, actualDamage, world, () -> onStormEnd(manager));
+            activeStormManagers.add(manager);
+
+            TravelingStorm storm = manager.getActiveStorm();
+            if (storm != null) {
+                activeStorms.add(storm);
+            }
+        }
+
+        // Set weather and update tasks
+        setStormWeather();
+        startMultiStormTasks();
+    }
+
+    /**
+     * Callback when an individual storm ends.
+     */
+    private void onStormEnd(TravelingStormManager endedManager) {
+        activeStormManagers.remove(endedManager);
+        if (endedManager.getActiveStorm() != null) {
+            activeStorms.remove(endedManager.getActiveStorm());
+        }
+
+        // If all storms ended, clean up
+        if (activeStormManagers.isEmpty()) {
+            clearMultiStormTasks();
+            clearStormWeather();
+
+            if (config.isLogScheduling()) {
+                plugin.getLogger().info("All storms in burst have ended");
+            }
+        }
+    }
+
+    /**
+     * Starts tasks for multiple storms.
+     */
+    private void startMultiStormTasks() {
+        // Only start once if not already running
+        if (damageTask != null) {
+            return;
+        }
+
+        // Start damage task (handles all storms)
+        int checkInterval = config.getExposureCheckIntervalTicks();
+        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, vaultIntegration, zoneManager);
+        damageTask.setActiveStorms(activeStorms);
+        damageTask.runTaskTimer(plugin, checkInterval, checkInterval);
+
+        // Start block damage task
+        if (config.isBlockDamageEnabled() && zoneManager.isEnabled()) {
+            blockDamageTask = new BlockDamageTask(plugin, config, zoneManager, worldGuardIntegration);
+            blockDamageTask.setActiveStorms(activeStorms);
+            blockDamageTask.runTaskTimer(plugin, 100L, 100L);
+        }
+
+        // Start storm drops
+        if (config.isStormDropsEnabled() && zoneManager.isEnabled()) {
+            stormDropsManager = new StormDropsManager(plugin, config, zoneManager);
+            stormDropsManager.setActiveStorms(activeStorms);
+            int dropInterval = config.getStormDropsCheckIntervalTicks();
+            stormDropsManager.runTaskTimer(plugin, dropInterval, dropInterval);
+        }
+
+        // Start storm tracker (shows closest storm)
+        stormTracker = new dev.ked.stormcraft.ui.StormTracker(plugin, config, zoneManager);
+        stormTracker.setActiveStorms(activeStorms);
+        int trackerInterval = config.getStormTrackerUpdateInterval();
+        stormTracker.runTaskTimer(plugin, 0L, trackerInterval);
+    }
+
+    /**
+     * Clears all multi-storm tasks.
+     */
+    private void clearMultiStormTasks() {
+        if (damageTask != null) {
+            damageTask.cancel();
+            damageTask = null;
+        }
+        if (blockDamageTask != null) {
+            blockDamageTask.cancel();
+            blockDamageTask = null;
+        }
+        if (stormDropsManager != null) {
+            stormDropsManager.cancel();
+            stormDropsManager = null;
+        }
+        if (stormTracker != null) {
+            stormTracker.shutdown();
+            stormTracker = null;
         }
     }
 
@@ -382,6 +552,8 @@ public class StormManager {
                     customDuration,
                     upcomingProfile.getMinDamagePerSecond(),
                     upcomingProfile.getMaxDamagePerSecond(),
+                    upcomingProfile.getMinMovementSpeed(),
+                    upcomingProfile.getMaxMovementSpeed(),
                     upcomingProfile.hasBlindness(),
                     upcomingProfile.getSlownessAmplifier(),
                     upcomingProfile.getLightningStrikeChance()
@@ -553,6 +725,20 @@ public class StormManager {
 
     public StormPhase getCurrentPhase() {
         return currentPhase;
+    }
+
+    /**
+     * Gets the list of active storms (for multi-storm system).
+     */
+    public List<TravelingStorm> getActiveStorms() {
+        return new ArrayList<>(activeStorms);
+    }
+
+    /**
+     * Checks if there are any active storms (for multi-storm system).
+     */
+    public boolean hasActiveStorms() {
+        return !activeStorms.isEmpty();
     }
 
     public enum StormPhase {

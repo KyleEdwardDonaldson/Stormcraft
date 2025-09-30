@@ -13,7 +13,9 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,6 +29,7 @@ public class StormTracker extends BukkitRunnable {
     private final ZoneManager zoneManager;
 
     private TravelingStorm activeStorm;
+    private List<TravelingStorm> activeStorms = new ArrayList<>();
     private final Map<UUID, BossBar> playerBossBars = new HashMap<>();
 
     // Cardinal directions
@@ -47,8 +50,23 @@ public class StormTracker extends BukkitRunnable {
         }
     }
 
+    public void setActiveStorms(List<TravelingStorm> storms) {
+        this.activeStorms = storms;
+
+        if (storms.isEmpty()) {
+            clearAllBossBars();
+        }
+    }
+
     @Override
     public void run() {
+        // Multi-storm system - show closest storm
+        if (!activeStorms.isEmpty()) {
+            runMultiStormTracking();
+            return;
+        }
+
+        // Single storm system (legacy)
         if (activeStorm == null) {
             return;
         }
@@ -76,6 +94,65 @@ public class StormTracker extends BukkitRunnable {
                 removePlayerDisplay(player);
             }
         }
+    }
+
+    /**
+     * Handles storm tracking for multiple simultaneous storms.
+     * Shows the closest storm to each player.
+     */
+    private void runMultiStormTracking() {
+        double damageRadius = config.getStormDamageRadius();
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            // Skip if player not in enabled world
+            if (!config.getEnabledWorlds().contains(player.getWorld().getName())) {
+                removePlayerDisplay(player);
+                continue;
+            }
+
+            Location playerLoc = player.getLocation();
+
+            // Find closest storm to this player
+            TravelingStorm closestStorm = findClosestStormToPlayer(player);
+
+            if (closestStorm == null) {
+                removePlayerDisplay(player);
+                continue;
+            }
+
+            Location stormLocation = closestStorm.getCurrentLocation();
+            double distance = playerLoc.distance(stormLocation);
+
+            // Determine if player should see storm info
+            boolean showTracker = shouldShowTracker(player, distance);
+
+            if (showTracker) {
+                updatePlayerStormDisplay(player, stormLocation, distance, damageRadius);
+            } else {
+                removePlayerDisplay(player);
+            }
+        }
+    }
+
+    /**
+     * Finds the closest storm to a player.
+     */
+    private TravelingStorm findClosestStormToPlayer(Player player) {
+        TravelingStorm closest = null;
+        double closestDistance = Double.MAX_VALUE;
+
+        for (TravelingStorm storm : activeStorms) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(player.getWorld())) {
+                double distance = player.getLocation().distance(stormLoc);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closest = storm;
+                }
+            }
+        }
+
+        return closest;
     }
 
     /**

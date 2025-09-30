@@ -62,7 +62,26 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
     }
 
     private void showStatus(CommandSender sender) {
-        // Check for traveling storm first
+        // Check for multiple active storms first
+        List<TravelingStorm> activeStorms = stormManager.getActiveStorms();
+        if (!activeStorms.isEmpty()) {
+            // Find closest storm to player if sender is a player
+            if (sender instanceof Player player) {
+                TravelingStorm closestStorm = findClosestStorm(player, activeStorms);
+                if (closestStorm != null) {
+                    showTravelingStormStatus(sender, closestStorm);
+                    sender.sendMessage(Component.text("(" + activeStorms.size() + " total active storms)", NamedTextColor.GRAY));
+                    return;
+                }
+            } else {
+                // If not a player, just show the first storm
+                showTravelingStormStatus(sender, activeStorms.get(0));
+                sender.sendMessage(Component.text("(" + activeStorms.size() + " total active storms)", NamedTextColor.GRAY));
+                return;
+            }
+        }
+
+        // Check for traveling storm (legacy single storm)
         TravelingStorm travelingStorm = stormManager.getTravelingStorm();
         if (travelingStorm != null) {
             showTravelingStormStatus(sender, travelingStorm);
@@ -91,6 +110,27 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
             );
             sender.sendMessage(config.formatMessage("status.idle", placeholders));
         }
+    }
+
+    /**
+     * Finds the closest storm to a player.
+     */
+    private TravelingStorm findClosestStorm(Player player, List<TravelingStorm> storms) {
+        TravelingStorm closest = null;
+        double closestDistance = Double.MAX_VALUE;
+
+        for (TravelingStorm storm : storms) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(player.getWorld())) {
+                double distance = player.getLocation().distance(stormLoc);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closest = storm;
+                }
+            }
+        }
+
+        return closest;
     }
 
     private void showTravelingStormStatus(CommandSender sender, TravelingStorm storm) {
