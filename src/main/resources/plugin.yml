@@ -17,9 +17,7 @@ softdepend:
   - PlaceholderAPI
   - WorldGuard
   - Vault
-  - Dynmap
   - squaremap
-  - BlueMap
 
 commands:
   stormcraft:

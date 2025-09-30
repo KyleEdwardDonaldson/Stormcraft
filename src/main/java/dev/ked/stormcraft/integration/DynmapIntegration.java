@@ -93,7 +93,7 @@ public class DynmapIntegration {
         // Remove existing circles if they exist
         removeZoneCircles();
 
-        // Create Stormlands circle (innermost, red)
+        // Create Stormlands circle (inner boundary, red with fill)
         stormlandsCircle = markerSet.createCircleMarker(
             "stormlands_zone",
             "Stormlands",
@@ -106,14 +106,14 @@ public class DynmapIntegration {
             zoneManager.getStormlandsRadius(),
             true
         );
-        stormlandsCircle.setFillStyle(0.3, 0xFF4444); // Red with transparency
-        stormlandsCircle.setLineStyle(2, 1.0, 0xFF0000); // Solid red border
+        stormlandsCircle.setFillStyle(0.2, 0xFF4444); // Light red fill
+        stormlandsCircle.setLineStyle(3, 1.0, 0xFF0000); // Solid red border
         stormlandsCircle.setLabel("Stormlands (High Risk, High Reward)");
 
-        // Create Storm Zone circle (middle ring, orange)
+        // Create Storm Zone circle (middle boundary, yellow/orange - boundary only)
         stormZoneCircle = markerSet.createCircleMarker(
             "storm_zone",
-            "Storm Zone",
+            "Storm Zone Border",
             false,
             worldName,
             centerX,
@@ -123,14 +123,14 @@ public class DynmapIntegration {
             zoneManager.getStormZoneRadius(),
             true
         );
-        stormZoneCircle.setFillStyle(0.2, 0xFFAA00); // Orange with transparency
-        stormZoneCircle.setLineStyle(2, 1.0, 0xFF8800); // Solid orange border
-        stormZoneCircle.setLabel("Storm Zone (Moderate Risk)");
+        stormZoneCircle.setFillStyle(0.0, 0x000000); // No fill
+        stormZoneCircle.setLineStyle(3, 1.0, 0xFFC800); // Yellow/orange border
+        stormZoneCircle.setLabel("Storm Zone Border");
 
-        // Create Safe Zone circle (outermost, green)
+        // Create Safe Zone circle (outer boundary, green - boundary only)
         safeZoneCircle = markerSet.createCircleMarker(
             "safe_zone",
-            "Safe Zone",
+            "Safe Zone Border",
             false,
             worldName,
             centerX,
@@ -140,9 +140,9 @@ public class DynmapIntegration {
             zoneManager.getSafeZoneRadius(),
             true
         );
-        safeZoneCircle.setFillStyle(0.1, 0x44FF44); // Green with transparency
-        safeZoneCircle.setLineStyle(2, 1.0, 0x00FF00); // Solid green border
-        safeZoneCircle.setLabel("Safe Zone (Low Storm Frequency)");
+        safeZoneCircle.setFillStyle(0.0, 0x000000); // No fill
+        safeZoneCircle.setLineStyle(3, 1.0, 0x00FF00); // Solid green border
+        safeZoneCircle.setLabel("Safe Zone Border");
     }
 
     /**

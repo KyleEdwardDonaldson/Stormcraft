@@ -4,8 +4,6 @@ import dev.ked.stormcraft.command.StormcraftCommand;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.config.PersistenceManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
-import dev.ked.stormcraft.integration.BluemapIntegration;
-import dev.ked.stormcraft.integration.DynmapIntegration;
 import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.integration.PlaceholderAPIIntegration;
 import dev.ked.stormcraft.integration.SquaremapIntegration;
@@ -31,9 +29,7 @@ public class StormcraftPlugin extends JavaPlugin {
     private WorldGuardIntegration worldGuardIntegration;
     private VaultIntegration vaultIntegration;
     private ZoneManager zoneManager;
-    private DynmapIntegration dynmapIntegration;
     private SquaremapIntegration squaremapIntegration;
-    private BluemapIntegration bluemapIntegration;
     private PlayerExposureUtil exposureUtil;
     private StormManager stormManager;
     private PlaceholderAPIIntegration placeholderAPIIntegration;
@@ -64,13 +60,7 @@ public class StormcraftPlugin extends JavaPlugin {
             getLogger().info("Zone system enabled: Stormlands, Storm Zone, Safe Zone");
         }
 
-        // Initialize map integrations
-        dynmapIntegration = new DynmapIntegration(this, zoneManager);
-        if (dynmapIntegration.initialize()) {
-            getLogger().info("Dynmap visualization enabled.");
-        }
-
-        // Only create squaremap integration if plugin is present
+        // Initialize map integration (squaremap only)
         if (Bukkit.getPluginManager().getPlugin("squaremap") != null) {
             try {
                 squaremapIntegration = new SquaremapIntegration(this, zoneManager);
@@ -82,22 +72,8 @@ public class StormcraftPlugin extends JavaPlugin {
             }
         }
 
-        // Only create BlueMap integration if plugin is present
-        if (Bukkit.getPluginManager().getPlugin("BlueMap") != null) {
-            try {
-                bluemapIntegration = new BluemapIntegration(this, zoneManager);
-                if (bluemapIntegration.initialize()) {
-                    getLogger().info("BlueMap visualization enabled.");
-                }
-            } catch (NoClassDefFoundError e) {
-                getLogger().warning("BlueMap plugin found but API not available: " + e.getMessage());
-            }
-        }
-
         // Create map integration manager
-        MapIntegrationManager mapIntegrationManager = new MapIntegrationManager(
-            dynmapIntegration, squaremapIntegration, bluemapIntegration
-        );
+        MapIntegrationManager mapIntegrationManager = new MapIntegrationManager(squaremapIntegration);
 
         // Initialize core systems
         exposureUtil = new PlayerExposureUtil(this, configManager);
