@@ -89,6 +89,14 @@ zones:
       shortWeak: 0.20
       medium: 0.30
       longDangerous: 0.50
+    biomePreferences:  # Storms prefer mountainous/harsh terrain
+      JAGGED_PEAKS: 3.0
+      FROZEN_PEAKS: 3.0
+      STONY_PEAKS: 3.0
+      WINDSWEPT_HILLS: 2.5
+      WINDSWEPT_GRAVELLY_HILLS: 2.5
+      WINDSWEPT_SAVANNA: 2.0
+      WINDSWEPT_FOREST: 2.0
 
   # Storm Zone - Moderate risk/reward middle ring
   stormZone:
@@ -103,6 +111,14 @@ zones:
       shortWeak: 0.40
       medium: 0.40
       longDangerous: 0.20
+    biomePreferences:  # Storms prefer open/exposed areas
+      PLAINS: 2.0
+      SUNFLOWER_PLAINS: 2.0
+      SAVANNA: 2.0
+      SPARSE_JUNGLE: 1.8
+      BIRCH_FOREST: 1.5
+      FLOWER_FOREST: 1.5
+      MEADOW: 2.0
 
   # Safe Zone - Low risk outer region
   safeZone:
@@ -116,6 +132,16 @@ zones:
       shortWeak: 0.70
       medium: 0.25
       longDangerous: 0.05
+    biomePreferences:  # Storms prefer sheltered/dense areas
+      DARK_FOREST: 2.0
+      JUNGLE: 2.0
+      BAMBOO_JUNGLE: 2.0
+      OLD_GROWTH_TAIGA: 1.8
+      TAIGA: 1.5
+      MANGROVE_SWAMP: 1.8
+      SWAMP: 1.5
+      MUSHROOM_FIELDS: 2.5
+      DEEP_DARK: 2.5
 
 # Traveling Storm System - Storms move across the map toward Stormlands
 travelingStorms:

@@ -6,6 +6,7 @@ import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.model.StormProfile;
 import dev.ked.stormcraft.model.TravelingStorm;
 import dev.ked.stormcraft.zones.ZoneManager;
+import dev.ked.stormcraft.zones.ZoneSettings;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -140,15 +141,12 @@ public class TravelingStormManager extends BukkitRunnable {
     /**
      * Gets a random spawn location for the storm.
      * Can spawn at zone border or use old logic based on config.
+     * Uses biome preferences to favor certain biomes in each zone.
      */
     private Location getRandomSpawnLocation(World world) {
         if (!zoneManager.isEnabled()) {
             // Random location within 5000 blocks of spawn
-            double angle = random.nextDouble() * 2 * Math.PI;
-            double distance = random.nextDouble() * 5000;
-            double x = Math.cos(angle) * distance;
-            double z = Math.sin(angle) * distance;
-            return new Location(world, x, 64, z);
+            return getBestBiomeLocation(world, 0, 0, 0, 5000, null);
         }
 
         double centerX = zoneManager.getCenterX();
@@ -160,30 +158,64 @@ public class TravelingStormManager extends BukkitRunnable {
             double bias = config.getBorderBias(); // 0.0 = Safe Zone, 1.0 = Storm Zone
             double spread = config.getBorderSpread(); // +/- spread around border
 
-            // Calculate actual radius with bias
-            // bias 0.7 means 70% toward Storm Zone, 30% toward Safe Zone
-            double biasedOffset = (random.nextDouble() - 0.5) * 2 * spread; // -spread to +spread
-            double actualRadius = borderRadius + (biasedOffset * (bias * 2 - 1));
+            // Get zone at border for biome preferences
+            Location borderLoc = new Location(world, centerX + borderRadius, 64, centerZ);
+            dev.ked.stormcraft.zones.ZoneManager.ZoneType zone = zoneManager.getZoneAt(borderLoc);
 
-            // Random angle around the circle
-            double angle = random.nextDouble() * 2 * Math.PI;
-            double x = centerX + (Math.cos(angle) * actualRadius);
-            double z = centerZ + (Math.sin(angle) * actualRadius);
-
-            return new Location(world, x, 64, z);
+            return getBestBiomeLocation(world, centerX, centerZ, borderRadius - spread, borderRadius + spread, zone);
         }
 
         // Old logic: Spawn outside Storm Zone, moving toward Stormlands
         double minRadius = zoneManager.getStormZoneRadius() + 500;
         double maxRadius = minRadius + 2000;
 
-        double angle = random.nextDouble() * 2 * Math.PI;
-        double distance = minRadius + (random.nextDouble() * (maxRadius - minRadius));
+        Location testLoc = new Location(world, centerX + minRadius, 64, centerZ);
+        dev.ked.stormcraft.zones.ZoneManager.ZoneType zone = zoneManager.getZoneAt(testLoc);
 
-        double x = centerX + (Math.cos(angle) * distance);
-        double z = centerZ + (Math.sin(angle) * distance);
+        return getBestBiomeLocation(world, centerX, centerZ, minRadius, maxRadius, zone);
+    }
 
-        return new Location(world, x, 64, z);
+    /**
+     * Generates multiple candidate locations and picks the best one based on biome preferences.
+     * Tries up to 10 locations and picks the one with the highest biome weight.
+     */
+    private Location getBestBiomeLocation(World world, double centerX, double centerZ,
+                                         double minRadius, double maxRadius, dev.ked.stormcraft.zones.ZoneManager.ZoneType zone) {
+        Location bestLocation = null;
+        double bestWeight = 0.0;
+        int attempts = 10; // Try 10 candidates
+
+        for (int i = 0; i < attempts; i++) {
+            double angle = random.nextDouble() * 2 * Math.PI;
+            double distance = minRadius + (random.nextDouble() * (maxRadius - minRadius));
+            double x = centerX + (Math.cos(angle) * distance);
+            double z = centerZ + (Math.sin(angle) * distance);
+
+            Location candidate = new Location(world, x, 64, z);
+            org.bukkit.block.Biome biome = world.getBiome((int)x, 64, (int)z);
+
+            // Get biome weight from zone settings
+            double weight = 1.0; // Default neutral weight
+            if (zone != null) {
+                ZoneSettings settings = zoneManager.getSettingsForZone(zone);
+                if (settings != null) {
+                    weight = settings.getBiomeWeight(biome);
+                }
+            }
+
+            // Pick this location if it's the best so far
+            if (weight > bestWeight || bestLocation == null) {
+                bestWeight = weight;
+                bestLocation = candidate;
+            }
+
+            // If we found a highly preferred biome (2.5x+), use it immediately
+            if (weight >= 2.5) {
+                break;
+            }
+        }
+
+        return bestLocation;
     }
 
     /**

@@ -419,9 +419,9 @@ public class ConfigManager {
 
             // Default settings
             Map<StormType, Double> defaultWeights = new HashMap<>(stormWeights);
-            stormlandsSettings = new ZoneSettings(3.0, defaultWeights, 2.5, 3.0, true, 0.01, true, 0.1);
-            stormZoneSettings = new ZoneSettings(1.5, defaultWeights, 1.5, 1.5, false, 0.0, true, 0.05);
-            safeZoneSettings = new ZoneSettings(0.3, defaultWeights, 1.0, 1.0, false, 0.0, false, 0.0);
+            stormlandsSettings = new ZoneSettings(3.0, defaultWeights, 2.5, 3.0, true, 0.01, true, 0.1, null);
+            stormZoneSettings = new ZoneSettings(1.5, defaultWeights, 1.5, 1.5, false, 0.0, true, 0.05, null);
+            safeZoneSettings = new ZoneSettings(0.3, defaultWeights, 1.0, 1.0, false, 0.0, false, 0.0, null);
         }
     }
 
@@ -429,7 +429,7 @@ public class ConfigManager {
                                                      boolean defaultBlockDamage, boolean defaultStormDrops) {
         if (section == null) {
             return new ZoneSettings(defaultFreq, new HashMap<>(stormWeights), 1.0, 1.0,
-                                  defaultBlockDamage, 0.01, defaultStormDrops, 0.05);
+                                  defaultBlockDamage, 0.01, defaultStormDrops, 0.05, null);
         }
 
         double stormFreqMult = section.getDouble("stormFrequencyMultiplier", defaultFreq);
@@ -452,8 +452,23 @@ public class ConfigManager {
             zoneWeights = new HashMap<>(stormWeights);
         }
 
+        // Load biome preferences for this zone
+        Map<org.bukkit.block.Biome, Double> biomePrefs = new HashMap<>();
+        ConfigurationSection biomeSection = section.getConfigurationSection("biomePreferences");
+        if (biomeSection != null) {
+            for (String biomeKey : biomeSection.getKeys(false)) {
+                try {
+                    org.bukkit.block.Biome biome = org.bukkit.block.Biome.valueOf(biomeKey);
+                    double weight = biomeSection.getDouble(biomeKey, 1.0);
+                    biomePrefs.put(biome, weight);
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Invalid biome name in config: " + biomeKey);
+                }
+            }
+        }
+
         return new ZoneSettings(stormFreqMult, zoneWeights, resourceMult, essenceMult,
-                              blockDmg, blockDmgChance, stormDrops, stormDropChance);
+                              blockDmg, blockDmgChance, stormDrops, stormDropChance, biomePrefs);
     }
 
     private void validateConfig() {
