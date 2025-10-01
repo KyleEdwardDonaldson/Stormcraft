@@ -11,11 +11,9 @@ import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.listener.WeatherControlListener;
 import dev.ked.stormcraft.schedule.StormManager;
-import dev.ked.stormcraft.worldgen.StormcraftWorldGenerator;
 import dev.ked.stormcraft.zones.ZoneManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -226,11 +224,5 @@ public class StormcraftPlugin extends JavaPlugin {
 
     public WorldGuardIntegration getWorldGuardIntegration() {
         return worldGuardIntegration;
-    }
-
-    @Override
-    public ChunkGenerator getDefaultWorldGenerator(String worldName, String id) {
-        getLogger().info("Providing Stormcraft world generator for world: " + worldName);
-        return new StormcraftWorldGenerator(this);
     }
 }

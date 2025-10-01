@@ -1,6 +1,7 @@
 package dev.ked.stormcraft.schedule;
 
 import dev.ked.stormcraft.StormcraftPlugin;
+import dev.ked.stormcraft.api.events.StormcraftEssenceAwardEvent;
 import dev.ked.stormcraft.api.events.StormcraftExposureCheckEvent;
 import dev.ked.stormcraft.api.events.StormcraftStormTickEvent;
 import dev.ked.stormcraft.config.ConfigManager;
@@ -484,6 +485,13 @@ public class DamageTask extends BukkitRunnable {
         double essence = baseEssence * multiplier;
 
         vaultIntegration.awardEssence(player, essence);
+
+        // Fire event for tracking storm-earned essence (for progression systems)
+        int checkInterval = config.getExposureCheckIntervalTicks();
+        StormcraftEssenceAwardEvent essenceEvent = new StormcraftEssenceAwardEvent(
+                player, essence, profile.getType(), checkInterval
+        );
+        Bukkit.getPluginManager().callEvent(essenceEvent);
     }
 
     /**

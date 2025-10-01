@@ -36,7 +36,13 @@ public class VaultIntegration {
         enabled = economy != null;
 
         if (enabled) {
-            plugin.getLogger().info("Vault economy integration enabled. Currency: " + economy.currencyNamePlural());
+            try {
+                String currencyName = economy.currencyNamePlural();
+                plugin.getLogger().info("Vault economy integration enabled. Currency: " + currencyName);
+            } catch (Exception e) {
+                // Economy provider (e.g., Essentials) may not be fully initialized yet
+                plugin.getLogger().info("Vault economy integration enabled.");
+            }
         }
 
         return enabled;
