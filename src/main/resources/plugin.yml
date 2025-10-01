@@ -13,8 +13,8 @@ load: POSTWORLD
 softdepend:
   - PlaceholderAPI
   - WorldGuard
-  - Vault
   - squaremap
+  - Stormcraft-Essence
 
 commands:
   storm:

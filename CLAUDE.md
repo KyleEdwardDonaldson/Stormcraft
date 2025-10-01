@@ -113,15 +113,17 @@ Both are optional; plugin must function without them.
 
 ## Commands
 
-All commands use base `/stormcraft` (aliases: `/sc`, `/storm`):
+All commands use base `/storm`:
 
-- `/stormcraft` - Show current status
-- `/stormcraft start [type] [seconds]` - Force start storm (requires `stormcraft.admin.start`)
-- `/stormcraft stop` - End current storm (requires `stormcraft.admin.stop`)
-- `/stormcraft next [seconds]` - Set next storm timer (requires `stormcraft.admin.next`)
-- `/stormcraft reload` - Reload configs (requires `stormcraft.admin.reload`)
-- `/stormcraft testdamage [seconds]` - Test exposure damage on self (requires `stormcraft.admin.test`)
-- `/stormcraft weights` - Display current storm type weights (requires `stormcraft.admin`)
+- `/storm` - Show current status
+- `/storm start [type] [seconds]` - Force start storm (requires `stormcraft.admin.start`)
+- `/storm stop` - End current storm (requires `stormcraft.admin.stop`)
+- `/storm next [seconds]` - Set next storm timer (requires `stormcraft.admin.next`)
+- `/storm reload` - Reload configs (requires `stormcraft.admin.reload`)
+- `/storm testdamage [seconds]` - Test exposure damage on self (requires `stormcraft.admin.test`)
+- `/storm weights` - Display current storm type weights (requires `stormcraft.admin`)
+- `/storm ui` - Toggle storm UI display mode (action bar / boss bar)
+- `/storms` - List all active storms
 
 ## Configuration Files
 

@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Command handler for /stormcraft and all subcommands.
+ * Command handler for /storm admin subcommands.
  */
 public class StormcraftCommand implements CommandExecutor, TabCompleter {
     private final StormcraftPlugin plugin;
@@ -54,7 +54,7 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
             case "reload" -> handleReload(sender);
             case "testdamage" -> handleTestDamage(sender, args);
             case "weights" -> handleWeights(sender);
-            default -> sender.sendMessage(Component.text("Unknown subcommand. Use /stormcraft for help.")
+            default -> sender.sendMessage(Component.text("Unknown subcommand. Use /storm for help.")
                     .color(NamedTextColor.RED));
         }
 
@@ -195,7 +195,7 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
         StormType type = null;
         Integer duration = null;
 
-        // Parse arguments: /stormcraft start [type] [seconds]
+        // Parse arguments: /storm start [type] [seconds]
         if (args.length >= 2) {
             String typeArg = args[1].toLowerCase();
             type = switch (typeArg) {
@@ -248,7 +248,7 @@ public class StormcraftCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            sender.sendMessage(Component.text("Usage: /stormcraft next <seconds>").color(NamedTextColor.RED));
+            sender.sendMessage(Component.text("Usage: /storm next <seconds>").color(NamedTextColor.RED));
             return;
         }
 

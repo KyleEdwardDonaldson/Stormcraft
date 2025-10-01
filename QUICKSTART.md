@@ -8,39 +8,51 @@ Your Stormcraft plugin is now running on your Paper server.
 
 ### Check Status
 ```
-/stormcraft
+/storm
 ```
 Shows current storm status and time until next storm.
 
 ### Force Start a Storm (for testing)
 ```
-/stormcraft start medium
+/storm start medium
 ```
 Starts a medium-intensity storm immediately.
 
 ### Stop Active Storm
 ```
-/stormcraft stop
+/storm stop
 ```
 Ends the current storm.
 
 ### Set Next Storm Timer
 ```
-/stormcraft next 30
+/storm next 30
 ```
 Sets the next storm to occur in 30 seconds.
 
 ### View Storm Weights
 ```
-/stormcraft weights
+/storm weights
 ```
 Shows the probability distribution of storm types.
 
 ### Reload Configuration
 ```
-/stormcraft reload
+/storm reload
 ```
 Reloads config.yml and messages.yml without restarting the server.
+
+### Toggle Storm UI
+```
+/storm ui
+```
+Cycles through UI display modes (Action Bar / Boss Bar / Both / Disabled).
+
+### List All Storms
+```
+/storms
+```
+Shows all active traveling storms (if enabled).
 
 ## Testing the Plugin
 
@@ -51,7 +63,7 @@ Reloads config.yml and messages.yml without restarting the server.
 
 2. **Start a test storm:**
    ```
-   /stormcraft start short
+   /storm start short
    ```
 
 3. **Test exposure mechanics:**
@@ -61,9 +73,9 @@ Reloads config.yml and messages.yml without restarting the server.
 
 4. **Test different storm types:**
    ```
-   /stormcraft start short     # 60s, 2 HP/s
-   /stormcraft start medium    # 150s, 4 HP/s, blindness, slowness
-   /stormcraft start long      # 240s, 6 HP/s, blindness, slowness, lightning
+   /storm start short     # 60s, 2 HP/s
+   /storm start medium    # 150s, 4 HP/s, blindness, slowness
+   /storm start long      # 240s, 6 HP/s, blindness, slowness, lightning
    ```
 
 ## Configuration
@@ -83,7 +95,7 @@ Edit these files in `plugins/Stormcraft/`:
 - Use MiniMessage format for colors
 - Available placeholders: `{time}`, `{dps}`, `{type}`, `{duration}`, `{next}`
 
-After editing, use `/stormcraft reload` to apply changes.
+After editing, use `/storm reload` to apply changes.
 
 ## Features
 
@@ -129,8 +141,8 @@ If you have PlaceholderAPI installed, you can use these placeholders:
 ## Troubleshooting
 
 ### "No active storm to stop"
-- Use `/stormcraft` to check if a storm is active
-- Use `/stormcraft start` to force start one for testing
+- Use `/storm` to check if a storm is active
+- Use `/storm start` to force start one for testing
 
 ### Players not taking damage
 - Check if they're in Creative/Spectator mode (configurable in config.yml)
@@ -138,7 +150,7 @@ If you have PlaceholderAPI installed, you can use these placeholders:
 - Verify the world is enabled in config.yml
 
 ### Changes not applying
-- Use `/stormcraft reload` after editing config files
+- Use `/storm reload` after editing config files
 - Check server console for any config errors
 
 ## Need Help?

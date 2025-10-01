@@ -24,10 +24,11 @@ Stormcraft adds dynamic weather events that pose a real threat to players. Seek 
 - **GameMode Exclusions** - Ignore creative/spectator modes
 - **WorldGuard Support** - Protected regions exempt from storm damage
 
-### Economy System (Vault Integration)
-- **Storm Essence** - Earn currency for braving storms
-- **Type Multipliers** - Higher rewards for more dangerous storms
-- **Zone Multipliers** - Bonus essence in high-risk areas
+### Storm Essence Economy
+- **Requires Stormcraft-Essence plugin** for economy features
+- Earn essence by surviving storm exposure
+- Type multipliers for different storm severities
+- Zone multipliers for high-risk areas
 
 ### 🗺️ **Stormlands Zone System** (Optional)
 
@@ -88,7 +89,7 @@ Transform your world with three risk/reward zones:
 ### Integrations
 - **PlaceholderAPI** - Display storm status in other plugins
 - **WorldGuard** - Respect protected regions
-- **Vault** - Economy/permissions support
+- **Stormcraft-Essence** - Essence economy and abilities (optional)
 - **Dynmap** - Visualize zones and storms on web map
 - **squaremap** - Modern map visualization support
 - **BlueMap** - 3D web map visualization
@@ -102,7 +103,7 @@ Transform your world with three risk/reward zones:
    - Java 17+
 
 2. **Optional Dependencies:**
-   - Vault (for economy features)
+   - **Stormcraft-Essence** (for essence economy and abilities)
    - PlaceholderAPI (for placeholders)
    - WorldGuard (for region protection)
    - Dynmap (for map visualization)
@@ -282,15 +283,7 @@ exposure:
 
 ### Economy Settings
 
-```yaml
-economy:
-  enabled: true
-  essencePerTick: 0.1  # Base essence per check tick
-  essenceMultipliers:
-    shortWeak: 1.0
-    medium: 2.0
-    longDangerous: 4.0
-```
+**Note:** Economy features have been moved to the **Stormcraft-Essence** plugin. Install Stormcraft-Essence to enable essence rewards and abilities. Configure economy settings in `plugins/Stormcraft-Essence/config.yml`.
 
 ---
 
@@ -299,23 +292,24 @@ economy:
 ### Player Commands
 - `/storm` - Check closest storm status (distance, direction, time remaining)
 - `/storms` - List all active storms
-- `/stormcraft` - Alias for `/storm`
+- `/storm ui` - Toggle storm UI display mode (action bar / boss bar)
+- `/storm infuse` - Place infusion pedestal (requires Stormcraft-Essence)
 
 ### Admin Commands
-- `/stormcraft start [type] [duration]` - Force start a storm
-- `/stormcraft stop` - End active storm
-- `/stormcraft next <seconds>` - Set/force next storm timer
-- `/stormcraft reload` - Reload configuration
-- `/stormcraft testdamage` - Test exposure damage on self
-- `/stormcraft weights` - View storm type weights
+- `/storm start [type] [duration]` - Force start a storm
+- `/storm stop` - End active storm
+- `/storm next <seconds>` - Set/force next storm timer
+- `/storm reload` - Reload configuration
+- `/storm testdamage` - Test exposure damage on self
+- `/storm weights` - View storm type weights
 
 **Examples:**
 ```
-/stormcraft start                    # Start random storm
-/stormcraft start longDangerous      # Start dangerous storm
-/stormcraft start medium 300         # Start 5-minute medium storm
-/stormcraft next 60                  # Next storm in 60 seconds
-/stormcraft next 0                   # Start countdown now
+/storm start                    # Start random storm
+/storm start longDangerous      # Start dangerous storm
+/storm start medium 300         # Start 5-minute medium storm
+/storm next 60                  # Next storm in 60 seconds
+/storm next 0                   # Start countdown now
 ```
 
 ---
@@ -544,7 +538,7 @@ Available placeholders when PlaceholderAPI is installed:
 - Build secure shelters with solid roofs
 - Monitor countdown warnings
 - Stay indoors during storms
-- Earn essence by surviving exposure
+- Earn essence by surviving exposure (requires Stormcraft-Essence)
 
 ### With Zones (Stormlands Mode)
 - **Safe Zone**: Safe building, slow progression
@@ -631,7 +625,7 @@ Output: `target/stormcraft-0.1.0.jar`
 - Check enabled worlds list
 - Verify no other weather plugins conflict
 - Check console for errors
-- Try `/stormcraft next 0` to force countdown
+- Try `/storm next 0` to force countdown
 
 **Performance issues:**
 - Disable ore generation if not using zones

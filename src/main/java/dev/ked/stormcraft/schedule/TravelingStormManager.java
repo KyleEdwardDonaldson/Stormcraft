@@ -28,6 +28,10 @@ public class TravelingStormManager extends BukkitRunnable {
     private TravelingStorm activeStorm;
     private Runnable onStormEndCallback;
 
+    // Performance optimization: track if players are near storm
+    private int tickCounter = 0;
+    private boolean wasActiveLastTick = false;
+
     public TravelingStormManager(StormcraftPlugin plugin, ConfigManager config,
                                 ZoneManager zoneManager, MapIntegrationManager mapIntegrationManager) {
         this.plugin = plugin;
@@ -109,21 +113,72 @@ public class TravelingStormManager extends BukkitRunnable {
             return;
         }
 
-        // Decrement remaining time
-        activeStorm.decrementRemaining(1);
+        tickCounter++;
 
-        // Move storm toward target
-        activeStorm.move(1.0); // Move based on 1 second elapsed
+        // Check if any players are nearby
+        boolean isActive = isAnyPlayerNearby();
+        double activeRange = config.getStormActiveRange();
+        int updateInterval = isActive ? config.getActiveUpdateInterval() : config.getDormantUpdateInterval();
+        int ticksPerUpdate = updateInterval / 20; // Convert ticks to seconds (20 ticks = 1 second)
 
-        // Update map markers
-        if (mapIntegrationManager != null) {
-            mapIntegrationManager.updateStormMarker(activeStorm);
+        // Log state transitions
+        if (isActive != wasActiveLastTick && config.isLogScheduling()) {
+            String state = isActive ? "ACTIVE" : "DORMANT";
+            plugin.getLogger().info(String.format("Storm at (%d, %d) became %s (%s players within %.0f blocks)",
+                (int)activeStorm.getCurrentLocation().getX(),
+                (int)activeStorm.getCurrentLocation().getZ(),
+                state,
+                isActive ? "has" : "no",
+                activeRange));
+        }
+        wasActiveLastTick = isActive;
+
+        // Only update on configured interval
+        if (tickCounter % ticksPerUpdate != 0) {
+            return;
+        }
+
+        // Decrement remaining time (by number of seconds elapsed)
+        activeStorm.decrementRemaining(ticksPerUpdate);
+
+        // Only move and update map if active or on dormant update interval
+        if (isActive || tickCounter % (config.getDormantUpdateInterval() / 20) == 0) {
+            // Move storm toward target
+            activeStorm.move(ticksPerUpdate); // Move based on elapsed seconds
+
+            // Update map markers
+            if (mapIntegrationManager != null) {
+                mapIntegrationManager.updateStormMarker(activeStorm);
+            }
         }
 
         // Check if storm expired
         if (activeStorm.isExpired()) {
             endStorm();
         }
+    }
+
+    /**
+     * Checks if any players are within active range of the storm.
+     */
+    private boolean isAnyPlayerNearby() {
+        if (activeStorm == null) {
+            return false;
+        }
+
+        double activeRange = config.getStormActiveRange();
+        double activeRangeSquared = activeRange * activeRange;
+        Location stormLoc = activeStorm.getCurrentLocation();
+
+        return Bukkit.getOnlinePlayers().stream()
+            .filter(p -> p.getWorld().equals(stormLoc.getWorld()))
+            .anyMatch(p -> {
+                Location pLoc = p.getLocation();
+                double dx = pLoc.getX() - stormLoc.getX();
+                double dz = pLoc.getZ() - stormLoc.getZ();
+                double distSquared = dx * dx + dz * dz;
+                return distSquared <= activeRangeSquared;
+            });
     }
 
     /**

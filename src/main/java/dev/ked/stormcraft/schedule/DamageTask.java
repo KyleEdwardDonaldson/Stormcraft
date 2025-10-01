@@ -6,7 +6,6 @@ import dev.ked.stormcraft.api.events.StormcraftExposureCheckEvent;
 import dev.ked.stormcraft.api.events.StormcraftStormTickEvent;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
-import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.model.ActiveStorm;
 import dev.ked.stormcraft.model.StormProfile;
@@ -36,7 +35,6 @@ public class DamageTask extends BukkitRunnable {
     private final ConfigManager config;
     private final PlayerExposureUtil exposureUtil;
     private final WorldGuardIntegration worldGuardIntegration;
-    private final VaultIntegration vaultIntegration;
     private final ZoneManager zoneManager;
     private final Random random = new Random();
 
@@ -44,14 +42,16 @@ public class DamageTask extends BukkitRunnable {
     private TravelingStorm travelingStorm;
     private List<TravelingStorm> activeStorms = new ArrayList<>();
 
+    // Performance optimization: track tick count for mob damage checks
+    private int tickCounter = 0;
+
     public DamageTask(StormcraftPlugin plugin, ConfigManager config,
                      PlayerExposureUtil exposureUtil, WorldGuardIntegration worldGuardIntegration,
-                     VaultIntegration vaultIntegration, ZoneManager zoneManager) {
+                     ZoneManager zoneManager) {
         this.plugin = plugin;
         this.config = config;
         this.exposureUtil = exposureUtil;
         this.worldGuardIntegration = worldGuardIntegration;
-        this.vaultIntegration = vaultIntegration;
         this.zoneManager = zoneManager;
     }
 
@@ -69,6 +69,8 @@ public class DamageTask extends BukkitRunnable {
 
     @Override
     public void run() {
+        tickCounter++;
+
         // Multi-storm system (erratic spawning)
         if (!activeStorms.isEmpty()) {
             runMultiStormCheck();
@@ -106,18 +108,14 @@ public class DamageTask extends BukkitRunnable {
             awardEssence(player, profile);
         }
 
-        // Apply damage to exposed mobs in enabled worlds
-        for (String worldName : config.getEnabledWorlds()) {
-            World world = Bukkit.getWorld(worldName);
-            if (world != null) {
-                for (LivingEntity entity : world.getLivingEntities()) {
-                    if (!(entity instanceof Player) && isEntityExposedToStorm(entity)) {
-                        // Use current damage (with ramp-up for traveling storms)
-                        double mobDamage = (activeStorm != null) ? activeStorm.getActualDamagePerSecond() : travelingStorm.getCurrentDamagePerSecond();
-                        applyMobDamage(entity, mobDamage);
-                    }
-                }
-            }
+        // Apply damage to exposed mobs (less frequently than players for performance)
+        int mobCheckInterval = config.getMobDamageCheckInterval();
+        if (tickCounter % mobCheckInterval == 0) {
+            Location stormLoc = (activeStorm != null) ?
+                new Location(Bukkit.getWorld(config.getEnabledWorlds().get(0)), 0, 64, 0) :
+                travelingStorm.getCurrentLocation();
+
+            checkMobsNearStorm(stormLoc, profile, actualDamage);
         }
 
         // Log exposure samples if enabled
@@ -173,27 +171,10 @@ public class DamageTask extends BukkitRunnable {
             awardEssence(player, profile);
         }
 
-        // Apply damage to exposed mobs (stack damage from all storms)
-        for (String worldName : config.getEnabledWorlds()) {
-            World world = Bukkit.getWorld(worldName);
-            if (world != null) {
-                for (LivingEntity entity : world.getLivingEntities()) {
-                    if (!(entity instanceof Player)) {
-                        double totalDamage = 0;
-
-                        // Check entity against each storm
-                        for (TravelingStorm storm : activeStorms) {
-                            if (isEntityExposedToMultiStorm(entity, storm)) {
-                                totalDamage += storm.getCurrentDamagePerSecond();
-                            }
-                        }
-
-                        if (totalDamage > 0) {
-                            applyMobDamage(entity, totalDamage);
-                        }
-                    }
-                }
-            }
+        // Apply damage to exposed mobs (less frequently for performance)
+        int mobCheckInterval = config.getMobDamageCheckInterval();
+        if (tickCounter % mobCheckInterval == 0) {
+            checkMobsNearMultiStorms();
         }
 
         // Log exposure samples if enabled
@@ -251,8 +232,8 @@ public class DamageTask extends BukkitRunnable {
     private boolean isPlayerExposedToMultiStorm(Player player, TravelingStorm storm) {
         Location playerLoc = player.getLocation();
 
-        // Check if player is within storm radius
-        if (!storm.isLocationInStorm(playerLoc, config.getStormDamageRadius())) {
+        // Check if player is within storm radius (use storm's actual radius)
+        if (!storm.isLocationInStorm(playerLoc, storm.getDamageRadius())) {
             return false;
         }
 
@@ -284,8 +265,8 @@ public class DamageTask extends BukkitRunnable {
             return false;
         }
 
-        // Check if entity is within storm radius
-        if (!storm.isLocationInStorm(loc, config.getStormDamageRadius())) {
+        // Check if entity is within storm radius (use storm's actual radius)
+        if (!storm.isLocationInStorm(loc, storm.getDamageRadius())) {
             return false;
         }
 
@@ -307,10 +288,10 @@ public class DamageTask extends BukkitRunnable {
      * Checks if a player is exposed to the storm, including WorldGuard region checks.
      */
     private boolean isPlayerExposedToStorm(Player player) {
-        // If using traveling storm, check if player is within storm radius
+        // If using traveling storm, check if player is within storm's actual radius
         if (travelingStorm != null && config.isTravelingStormsEnabled()) {
             Location playerLoc = player.getLocation();
-            if (!travelingStorm.isLocationInStorm(playerLoc, config.getStormDamageRadius())) {
+            if (!travelingStorm.isLocationInStorm(playerLoc, travelingStorm.getDamageRadius())) {
                 return false; // Player not in storm radius
             }
         }
@@ -380,6 +361,83 @@ public class DamageTask extends BukkitRunnable {
     }
 
     /**
+     * Optimized mob damage check - only checks mobs within storm's damage radius.
+     * Called less frequently than player checks for performance.
+     */
+    private void checkMobsNearStorm(Location stormLoc, StormProfile profile, double damage) {
+        if (stormLoc == null || stormLoc.getWorld() == null) {
+            return;
+        }
+
+        World world = stormLoc.getWorld();
+        // Use actual storm damage radius (or traveling storm radius if available)
+        double damageRadius = (travelingStorm != null) ?
+            travelingStorm.getDamageRadius() :
+            config.getStormDamageRadius();
+        double damageRadiusSquared = damageRadius * damageRadius;
+
+        // Only check mobs within storm's actual damage radius
+        world.getLivingEntities().stream()
+            .filter(entity -> !(entity instanceof Player))
+            .filter(entity -> {
+                Location loc = entity.getLocation();
+                double dx = loc.getX() - stormLoc.getX();
+                double dz = loc.getZ() - stormLoc.getZ();
+                return (dx * dx + dz * dz) <= damageRadiusSquared;
+            })
+            .filter(this::isEntityExposedToStorm)
+            .forEach(entity -> applyMobDamage(entity, damage));
+    }
+
+    /**
+     * Optimized mob damage check for multiple storms.
+     * Only checks mobs within the actual damage radius of storms.
+     */
+    private void checkMobsNearMultiStorms() {
+        for (String worldName : config.getEnabledWorlds()) {
+            World world = Bukkit.getWorld(worldName);
+            if (world == null) continue;
+
+            // Only check storms in this world
+            List<TravelingStorm> worldStorms = activeStorms.stream()
+                .filter(s -> s.getCurrentLocation().getWorld().equals(world))
+                .toList();
+
+            if (worldStorms.isEmpty()) continue;
+
+            // Get all mobs in this world
+            world.getLivingEntities().stream()
+                .filter(entity -> !(entity instanceof Player))
+                .forEach(entity -> {
+                    Location entityLoc = entity.getLocation();
+                    double totalDamage = 0;
+
+                    // Check entity against each storm in this world
+                    for (TravelingStorm storm : worldStorms) {
+                        Location stormLoc = storm.getCurrentLocation();
+                        double damageRadius = storm.getDamageRadius();
+                        double damageRadiusSquared = damageRadius * damageRadius;
+
+                        // Only check if entity is within storm's actual damage radius
+                        double dx = entityLoc.getX() - stormLoc.getX();
+                        double dz = entityLoc.getZ() - stormLoc.getZ();
+                        double distSquared = dx * dx + dz * dz;
+
+                        if (distSquared <= damageRadiusSquared) {
+                            if (isEntityExposedToMultiStorm(entity, storm)) {
+                                totalDamage += storm.getCurrentDamagePerSecond();
+                            }
+                        }
+                    }
+
+                    if (totalDamage > 0) {
+                        applyMobDamage(entity, totalDamage);
+                    }
+                });
+        }
+    }
+
+    /**
      * Checks if a mob/entity is exposed to the storm.
      * Only requires overhead block cover for protection.
      */
@@ -392,9 +450,9 @@ public class DamageTask extends BukkitRunnable {
             return false;
         }
 
-        // If using traveling storm, check if entity is within storm radius
+        // If using traveling storm, check if entity is within storm's actual radius
         if (travelingStorm != null && config.isTravelingStormsEnabled()) {
-            if (!travelingStorm.isLocationInStorm(loc, config.getStormDamageRadius())) {
+            if (!travelingStorm.isLocationInStorm(loc, travelingStorm.getDamageRadius())) {
                 return false; // Entity not in storm radius
             }
         }
@@ -499,14 +557,16 @@ public class DamageTask extends BukkitRunnable {
     }
 
     /**
-     * Awards essence (currency) to a player for being exposed to the storm.
+     * Fires essence award event for exposed players.
+     * Note: Stormcraft no longer directly awards essence.
+     * The Stormcraft-Essence plugin listens for this event and handles the actual deposit.
      */
     private void awardEssence(Player player, StormProfile profile) {
-        if (!config.isEconomyEnabled() || !vaultIntegration.isEnabled()) {
+        if (!config.isEconomyEnabled()) {
             return;
         }
 
-        // Calculate essence based on base rate and storm type multiplier
+        // Calculate base essence based on rate and storm type multiplier
         double baseEssence = config.getEssencePerTick();
         double multiplier = config.getEssenceMultipliers().getOrDefault(profile.getType(), 1.0);
 
@@ -518,12 +578,10 @@ public class DamageTask extends BukkitRunnable {
 
         double essence = baseEssence * multiplier;
 
-        vaultIntegration.awardEssence(player, essence);
-
-        // Fire event for tracking storm-earned essence (for progression systems)
+        // Fire event - let handlers (Stormcraft-Essence) deposit the essence
         int checkInterval = config.getExposureCheckIntervalTicks();
         StormcraftEssenceAwardEvent essenceEvent = new StormcraftEssenceAwardEvent(
-                player, essence, profile.getType(), checkInterval
+                player, essence, profile.getType(), checkInterval, player.getLocation()
         );
         Bukkit.getPluginManager().callEvent(essenceEvent);
     }

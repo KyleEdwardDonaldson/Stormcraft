@@ -1,14 +1,13 @@
 package dev.ked.stormcraft;
 
+import dev.ked.stormcraft.command.InfuseCommand;
 import dev.ked.stormcraft.command.StormcraftCommand;
-import dev.ked.stormcraft.compass.CompassManager;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.config.PersistenceManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
 import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.integration.PlaceholderAPIIntegration;
 import dev.ked.stormcraft.integration.SquaremapIntegration;
-import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.listener.PlayerJoinListener;
 import dev.ked.stormcraft.listener.WeatherControlListener;
@@ -27,14 +26,12 @@ public class StormcraftPlugin extends JavaPlugin {
     private ConfigManager configManager;
     private PersistenceManager persistenceManager;
     private WorldGuardIntegration worldGuardIntegration;
-    private VaultIntegration vaultIntegration;
     private ZoneManager zoneManager;
     private SquaremapIntegration squaremapIntegration;
     private PlayerExposureUtil exposureUtil;
     private StormManager stormManager;
     private PlaceholderAPIIntegration placeholderAPIIntegration;
     private dev.ked.stormcraft.ui.StormUIPreferences uiPreferences;
-    private CompassManager compassManager;
 
     private BukkitTask autosaveTask;
 
@@ -54,10 +51,6 @@ public class StormcraftPlugin extends JavaPlugin {
 
         // Initialize integrations
         worldGuardIntegration = new WorldGuardIntegration(this);
-        vaultIntegration = new VaultIntegration(this);
-        if (vaultIntegration.initialize() && configManager.isEconomyEnabled()) {
-            getLogger().info("Storm essence economy enabled.");
-        }
 
         // Initialize zone system
         zoneManager = new ZoneManager(this, configManager);
@@ -83,7 +76,7 @@ public class StormcraftPlugin extends JavaPlugin {
         // Initialize core systems
         exposureUtil = new PlayerExposureUtil(this, configManager);
         stormManager = new StormManager(this, configManager, exposureUtil, worldGuardIntegration,
-                                       vaultIntegration, zoneManager, mapIntegrationManager);
+                                       zoneManager, mapIntegrationManager);
 
         // Load saved state
         persistenceManager.loadState(stormManager);
@@ -93,11 +86,6 @@ public class StormcraftPlugin extends JavaPlugin {
 
         // Start storm manager
         stormManager.start();
-
-        // Initialize and start compass manager
-        compassManager = new CompassManager(this, configManager, stormManager);
-        compassManager.start();
-        getLogger().info("Compass navigation enabled - compasses point away from storms");
 
         // Register listeners
         registerListeners();
@@ -124,11 +112,6 @@ public class StormcraftPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         getLogger().info("Shutting down Stormcraft...");
-
-        // Stop compass manager
-        if (compassManager != null) {
-            compassManager.shutdown();
-        }
 
         // Stop storm manager
         if (stormManager != null) {
@@ -182,6 +165,8 @@ public class StormcraftPlugin extends JavaPlugin {
         } else {
             getLogger().warning("Failed to register /storms command!");
         }
+
+        // Note: /storm infuse command is handled by checking for Stormcraft-Essence plugin at runtime
     }
 
     private void autosave() {

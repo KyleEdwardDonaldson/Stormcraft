@@ -7,7 +7,6 @@ import dev.ked.stormcraft.api.events.StormcraftStormStartEvent;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
 import dev.ked.stormcraft.integration.MapIntegrationManager;
-import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.model.ActiveStorm;
 import dev.ked.stormcraft.model.TravelingStorm;
@@ -34,7 +33,6 @@ public class StormManager {
     private final ConfigManager config;
     private final PlayerExposureUtil exposureUtil;
     private final WorldGuardIntegration worldGuardIntegration;
-    private final VaultIntegration vaultIntegration;
     private final ZoneManager zoneManager;
     private final MapIntegrationManager mapIntegrationManager;
     private final Random random = new Random();
@@ -62,13 +60,12 @@ public class StormManager {
 
     public StormManager(StormcraftPlugin plugin, ConfigManager config,
                        PlayerExposureUtil exposureUtil, WorldGuardIntegration worldGuardIntegration,
-                       VaultIntegration vaultIntegration, ZoneManager zoneManager,
+                       ZoneManager zoneManager,
                        MapIntegrationManager mapIntegrationManager) {
         this.plugin = plugin;
         this.config = config;
         this.exposureUtil = exposureUtil;
         this.worldGuardIntegration = worldGuardIntegration;
-        this.vaultIntegration = vaultIntegration;
         this.zoneManager = zoneManager;
         this.mapIntegrationManager = mapIntegrationManager;
     }
@@ -299,7 +296,7 @@ public class StormManager {
 
         // Start damage task
         int checkInterval = config.getExposureCheckIntervalTicks();
-        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, vaultIntegration, zoneManager);
+        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, zoneManager);
         if (useTravelingStorm) {
             damageTask.setTravelingStorm(travelingStorm);
         } else {
@@ -459,7 +456,7 @@ public class StormManager {
 
         // Start damage task (handles all storms)
         int checkInterval = config.getExposureCheckIntervalTicks();
-        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, vaultIntegration, zoneManager);
+        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, zoneManager);
         damageTask.setActiveStorms(activeStorms);
         damageTask.runTaskTimer(plugin, checkInterval, checkInterval);
 
@@ -779,7 +776,7 @@ public class StormManager {
 
         // Restart damage task
         int checkInterval = config.getExposureCheckIntervalTicks();
-        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, vaultIntegration, zoneManager);
+        damageTask = new DamageTask(plugin, config, exposureUtil, worldGuardIntegration, zoneManager);
         damageTask.setActiveStorm(activeStorm);
         damageTask.runTaskTimer(plugin, checkInterval, checkInterval);
 

@@ -580,6 +580,12 @@ public class ConfigManager {
     public double getStormTrackerRange() { return stormTrackerRange; }
     public int getStormTrackerUpdateInterval() { return stormTrackerUpdateInterval; }
 
+    // Performance settings
+    public double getStormActiveRange() { return config.getDouble("performance.stormActiveRange", 2000.0); }
+    public int getDormantUpdateInterval() { return config.getInt("performance.dormantUpdateInterval", 1200); }
+    public int getActiveUpdateInterval() { return config.getInt("performance.activeUpdateInterval", 20); }
+    public int getMobDamageCheckInterval() { return config.getInt("performance.mobDamageCheckInterval", 100); }
+
     // Message formatters
     public Component formatMessage(String messageKey, Map<String, String> placeholders) {
         String message = switch (messageKey) {

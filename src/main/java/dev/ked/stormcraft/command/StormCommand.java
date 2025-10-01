@@ -7,6 +7,7 @@ import dev.ked.stormcraft.schedule.StormManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -37,6 +38,11 @@ public class StormCommand implements CommandExecutor {
         // Handle /storm ui subcommand
         if (args.length >= 1 && args[0].equalsIgnoreCase("ui")) {
             return handleUIToggle(sender);
+        }
+
+        // Handle /storm infuse subcommand
+        if (args.length >= 1 && args[0].equalsIgnoreCase("infuse")) {
+            return handleInfuse(sender);
         }
 
         // If args provided, delegate to admin command handler
@@ -239,5 +245,36 @@ public class StormCommand implements CommandExecutor {
         }
 
         return true;
+    }
+
+    private boolean handleInfuse(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("Only players can use this command!", NamedTextColor.RED));
+            return true;
+        }
+
+        // Check if Stormcraft-Essence is available
+        if (!Bukkit.getPluginManager().isPluginEnabled("Stormcraft-Essence")) {
+            player.sendMessage(Component.text("Storm infusion requires the Stormcraft-Essence plugin!", NamedTextColor.RED));
+            return true;
+        }
+
+        // Call the InfuseCommand via reflection to avoid hard dependency
+        try {
+            Object essencePlugin = Bukkit.getPluginManager().getPlugin("Stormcraft-Essence");
+            Object economy = essencePlugin.getClass().getMethod("getEconomy").invoke(essencePlugin);
+            double infuseCost = plugin.getConfig().getDouble("infusion.pedestal_cost", 1000.0);
+
+            dev.ked.stormcraft.command.InfuseCommand infuseCmd = new dev.ked.stormcraft.command.InfuseCommand(
+                plugin,
+                (net.milkbowl.vault.economy.Economy) economy,
+                infuseCost
+            );
+
+            return infuseCmd.onCommand(sender, null, "infuse", new String[0]);
+        } catch (Exception e) {
+            player.sendMessage(Component.text("Error accessing infusion system: " + e.getMessage(), NamedTextColor.RED));
+            return true;
+        }
     }
 }
