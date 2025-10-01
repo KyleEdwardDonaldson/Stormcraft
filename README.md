@@ -676,7 +676,12 @@ limitations under the License.
 
 ## 🔮 Roadmap
 
-### Recently Added (v0.1.0 - World Generation Update)
+### Recently Added (v0.1.0 - Compass & Abilities Update)
+- ✅ **Compass navigation** - Compass points away from nearest storm
+- ✅ **Zone-based actionbar** - Shows current zone (Stormlands/Storm Zone/Safe Zone)
+- ✅ **Variable storm sizes** - 300-3900 block radius based on storm type
+- ✅ **Storm tracking improvements** - Distance to edge calculations
+- ✅ **Stormclear ability support** - Temp speed boost for storms
 - ✅ **Custom world generator** - Ring-based biome distribution
 - ✅ **Biome-weighted storm spawning** - Storms prefer thematic biomes per zone
 - ✅ Multiple simultaneous storms (erratic spawning)
