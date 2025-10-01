@@ -27,6 +27,7 @@ public class StormTracker extends BukkitRunnable {
     private final StormcraftPlugin plugin;
     private final ConfigManager config;
     private final ZoneManager zoneManager;
+    private final StormUIPreferences uiPreferences;
 
     private TravelingStorm activeStorm;
     private List<TravelingStorm> activeStorms = new ArrayList<>();
@@ -35,10 +36,11 @@ public class StormTracker extends BukkitRunnable {
     // Cardinal directions
     private static final String[] DIRECTIONS = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
 
-    public StormTracker(StormcraftPlugin plugin, ConfigManager config, ZoneManager zoneManager) {
+    public StormTracker(StormcraftPlugin plugin, ConfigManager config, ZoneManager zoneManager, StormUIPreferences uiPreferences) {
         this.plugin = plugin;
         this.config = config;
         this.zoneManager = zoneManager;
+        this.uiPreferences = uiPreferences;
     }
 
     public void setActiveStorm(TravelingStorm storm) {
@@ -67,12 +69,18 @@ public class StormTracker extends BukkitRunnable {
         }
 
         // Single storm system (legacy)
-        if (activeStorm == null) {
+        if (activeStorm != null) {
+            runSingleStormTracking();
             return;
         }
 
+        // No active storms - just show zone info on actionbar
+        showZoneActionbarForAllPlayers();
+    }
+
+    private void runSingleStormTracking() {
         Location stormLocation = activeStorm.getCurrentLocation();
-        double damageRadius = config.getStormDamageRadius();
+        double damageRadius = activeStorm.getDamageRadius();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             // Skip if player not in enabled world
@@ -82,16 +90,31 @@ public class StormTracker extends BukkitRunnable {
 
             Location playerLoc = player.getLocation();
 
-            // Calculate distance to storm
-            double distance = playerLoc.distance(stormLocation);
+            // Calculate distance to storm edge
+            double distanceToCenter = playerLoc.distance(stormLocation);
+            double distanceToEdge = Math.max(0, distanceToCenter - damageRadius);
 
             // Determine if player should see storm info
-            boolean showTracker = shouldShowTracker(player, distance);
+            boolean showTracker = shouldShowTracker(player, distanceToEdge);
 
             if (showTracker) {
-                updatePlayerStormDisplay(player, stormLocation, distance, damageRadius);
+                // Single storm
+                updatePlayerStormDisplay(player, activeStorm, distanceToEdge);
             } else {
                 removePlayerDisplay(player);
+            }
+        }
+    }
+
+    private void showZoneActionbarForAllPlayers() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!config.getEnabledWorlds().contains(player.getWorld().getName())) {
+                continue;
+            }
+
+            UUID playerId = player.getUniqueId();
+            if (uiPreferences.isActionbarEnabled(playerId)) {
+                showActionBar(player, null, 0, 0); // Zone display doesn't need storm params
             }
         }
     }
@@ -101,8 +124,6 @@ public class StormTracker extends BukkitRunnable {
      * Shows the closest storm to each player.
      */
     private void runMultiStormTracking() {
-        double damageRadius = config.getStormDamageRadius();
-
         for (Player player : Bukkit.getOnlinePlayers()) {
             // Skip if player not in enabled world
             if (!config.getEnabledWorlds().contains(player.getWorld().getName())) {
@@ -112,22 +133,29 @@ public class StormTracker extends BukkitRunnable {
 
             Location playerLoc = player.getLocation();
 
-            // Find closest storm to this player
-            TravelingStorm closestStorm = findClosestStormToPlayer(player);
+            // Sort storms by distance to edge (same as /storms command)
+            java.util.List<TravelingStorm> sortedStorms = getSortedStormsByDistance(player);
 
-            if (closestStorm == null) {
+            if (sortedStorms.isEmpty()) {
                 removePlayerDisplay(player);
                 continue;
             }
 
+            // Show closest storm (storm #1)
+            TravelingStorm closestStorm = sortedStorms.get(0);
             Location stormLocation = closestStorm.getCurrentLocation();
-            double distance = playerLoc.distance(stormLocation);
+            double distanceToCenter = playerLoc.distance(stormLocation);
+            double damageRadius = closestStorm.getDamageRadius();
+
+            // Calculate distance to edge (0 if inside storm)
+            double distanceToEdge = Math.max(0, distanceToCenter - damageRadius);
 
             // Determine if player should see storm info
-            boolean showTracker = shouldShowTracker(player, distance);
+            boolean showTracker = shouldShowTracker(player, distanceToEdge);
 
             if (showTracker) {
-                updatePlayerStormDisplay(player, stormLocation, distance, damageRadius);
+                // Storm number is 1 (closest storm)
+                updatePlayerStormDisplay(player, closestStorm, distanceToEdge);
             } else {
                 removePlayerDisplay(player);
             }
@@ -135,50 +163,65 @@ public class StormTracker extends BukkitRunnable {
     }
 
     /**
-     * Finds the closest storm to a player.
+     * Gets storms sorted by distance to edge (same sorting as /storms command).
      */
-    private TravelingStorm findClosestStormToPlayer(Player player) {
-        TravelingStorm closest = null;
-        double closestDistance = Double.MAX_VALUE;
+    private java.util.List<TravelingStorm> getSortedStormsByDistance(Player player) {
+        java.util.List<TravelingStorm> sorted = new java.util.ArrayList<>(activeStorms);
+        sorted.sort((s1, s2) -> {
+            Location loc1 = s1.getCurrentLocation();
+            Location loc2 = s2.getCurrentLocation();
+            if (!loc1.getWorld().equals(player.getWorld())) return 1;
+            if (!loc2.getWorld().equals(player.getWorld())) return -1;
 
-        for (TravelingStorm storm : activeStorms) {
-            Location stormLoc = storm.getCurrentLocation();
-            if (stormLoc.getWorld().equals(player.getWorld())) {
-                double distance = player.getLocation().distance(stormLoc);
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closest = storm;
-                }
-            }
-        }
+            // Calculate distance to edge (0 if inside storm)
+            double distToCenter1 = player.getLocation().distance(loc1);
+            double distToEdge1 = Math.max(0, distToCenter1 - s1.getDamageRadius());
 
-        return closest;
+            double distToCenter2 = player.getLocation().distance(loc2);
+            double distToEdge2 = Math.max(0, distToCenter2 - s2.getDamageRadius());
+
+            return Double.compare(distToEdge1, distToEdge2);
+        });
+        return sorted;
     }
 
     /**
      * Determines if a player should see the storm tracker.
+     * Always shows the closest storm regardless of distance.
      */
     private boolean shouldShowTracker(Player player, double distance) {
-        // Always show if using ActionBar mode
-        if (config.getStormTrackerMode().equals("actionbar")) {
-            return distance <= config.getStormTrackerRange();
-        }
-
-        // BossBar mode: show if within range or in storm
-        return distance <= config.getStormTrackerRange() ||
-               distance <= config.getStormDamageRadius();
+        // Always show the closest storm to help players track them
+        return true;
     }
 
     /**
      * Updates storm display for a player.
+     * Shows both actionbar and bossbar based on user preferences.
      */
-    private void updatePlayerStormDisplay(Player player, Location stormLoc, double distance, double damageRadius) {
-        String direction = getDirection(player.getLocation(), stormLoc);
+    private void updatePlayerStormDisplay(Player player, TravelingStorm storm, double distanceToEdge) {
+        Location stormLoc = storm.getCurrentLocation();
+        double damageRadius = storm.getDamageRadius();
 
-        if (config.getStormTrackerMode().equals("actionbar")) {
-            showActionBar(player, direction, distance, damageRadius);
+        // Set player weather to rain if inside storm
+        boolean isInStorm = distanceToEdge == 0;
+        if (isInStorm) {
+            player.setPlayerWeather(org.bukkit.WeatherType.DOWNFALL);
         } else {
-            showBossBar(player, direction, distance, damageRadius);
+            player.resetPlayerWeather();
+        }
+        UUID playerId = player.getUniqueId();
+
+        // Show actionbar if enabled for this player
+        if (uiPreferences.isActionbarEnabled(playerId)) {
+            showActionBar(player, null, distanceToEdge, damageRadius);
+        }
+
+        // Show bossbar if enabled for this player
+        if (uiPreferences.isBossbarEnabled(playerId)) {
+            showBossBar(player, storm, distanceToEdge);
+        } else {
+            // If bossbar disabled, remove it if it exists
+            removePlayerBossBar(player);
         }
     }
 
@@ -186,22 +229,29 @@ public class StormTracker extends BukkitRunnable {
      * Shows storm info on player's ActionBar.
      */
     private void showActionBar(Player player, String direction, double distance, double damageRadius) {
+        // Show current zone instead of storm info
+        if (!zoneManager.isEnabled()) {
+            return; // Don't show anything if zones disabled
+        }
+
+        ZoneManager.ZoneType zone = zoneManager.getZoneAt(player.getLocation());
         Component message;
 
-        if (distance <= damageRadius) {
-            // Player is IN the storm - danger!
-            message = Component.text("⚡ ", NamedTextColor.RED, TextDecoration.BOLD)
-                    .append(Component.text("IN STORM", NamedTextColor.RED, TextDecoration.BOLD))
-                    .append(Component.text(" ⚡", NamedTextColor.RED, TextDecoration.BOLD));
-        } else {
-            // Show distance and direction
-            int distanceBlocks = (int) distance;
-            NamedTextColor color = getDistanceColor(distance);
-
-            message = Component.text("⛈ ", color)
-                    .append(Component.text("STORM ", color, TextDecoration.BOLD))
-                    .append(Component.text(direction, NamedTextColor.WHITE))
-                    .append(Component.text(" " + distanceBlocks + "m", color));
+        switch (zone) {
+            case STORMLANDS:
+                message = Component.text("⚡ ", NamedTextColor.RED, TextDecoration.BOLD)
+                        .append(Component.text("STORMLANDS", NamedTextColor.RED, TextDecoration.BOLD));
+                break;
+            case STORM_ZONE:
+                message = Component.text("⛈ ", NamedTextColor.YELLOW, TextDecoration.BOLD)
+                        .append(Component.text("STORM ZONE", NamedTextColor.YELLOW, TextDecoration.BOLD));
+                break;
+            case SAFE_ZONE:
+                message = Component.text("✓ ", NamedTextColor.GREEN, TextDecoration.BOLD)
+                        .append(Component.text("SAFE ZONE", NamedTextColor.GREEN, TextDecoration.BOLD));
+                break;
+            default:
+                return;
         }
 
         player.sendActionBar(message);
@@ -210,7 +260,7 @@ public class StormTracker extends BukkitRunnable {
     /**
      * Shows storm info on player's BossBar.
      */
-    private void showBossBar(Player player, String direction, double distance, double damageRadius) {
+    private void showBossBar(Player player, TravelingStorm storm, double distanceToEdge) {
         UUID playerId = player.getUniqueId();
         BossBar bossBar = playerBossBars.get(playerId);
 
@@ -226,21 +276,30 @@ public class StormTracker extends BukkitRunnable {
             player.showBossBar(bossBar);
         }
 
+        Location playerLoc = player.getLocation();
+        Location stormLoc = storm.getCurrentLocation();
+        double damageRadius = storm.getDamageRadius();
+
         // Update boss bar content
         Component title;
         BossBar.Color color;
         float progress;
 
-        if (distance <= damageRadius) {
-            // IN STORM
+        if (distanceToEdge == 0) {
+            // IN STORM - show escape direction
+            String escapeDirection = getEscapeDirection(player, storm);
+
             title = Component.text("⚡ ", NamedTextColor.RED, TextDecoration.BOLD)
                     .append(Component.text("ACTIVE STORM", NamedTextColor.RED, TextDecoration.BOLD))
-                    .append(Component.text(" - SEEK SHELTER", NamedTextColor.YELLOW));
+                    .append(Component.text(" - ESCAPE ", NamedTextColor.YELLOW))
+                    .append(Component.text(escapeDirection, NamedTextColor.WHITE, TextDecoration.BOLD));
             color = BossBar.Color.RED;
             progress = 1.0f;
         } else {
-            // Show approaching storm
-            int distanceBlocks = (int) distance;
+            // Show approaching storm (distance to edge)
+            String direction = getDirection(playerLoc, stormLoc);
+            int distanceBlocks = (int) distanceToEdge;
+
             title = Component.text("⛈ ", NamedTextColor.YELLOW)
                     .append(Component.text("Storm ", NamedTextColor.GOLD, TextDecoration.BOLD))
                     .append(Component.text(direction, NamedTextColor.WHITE))
@@ -249,12 +308,12 @@ public class StormTracker extends BukkitRunnable {
 
             // Progress bar based on distance (closer = fuller)
             double maxRange = config.getStormTrackerRange();
-            progress = Math.max(0.1f, (float) (1.0 - (distance / maxRange)));
+            progress = Math.max(0.1f, (float) (1.0 - (distanceToEdge / maxRange)));
 
             // Color based on distance
-            if (distance < 100) {
+            if (distanceToEdge < 100) {
                 color = BossBar.Color.RED;
-            } else if (distance < 300) {
+            } else if (distanceToEdge < 300) {
                 color = BossBar.Color.YELLOW;
             } else {
                 color = BossBar.Color.BLUE;
@@ -270,6 +329,13 @@ public class StormTracker extends BukkitRunnable {
      * Removes storm display from a player.
      */
     private void removePlayerDisplay(Player player) {
+        removePlayerBossBar(player);
+    }
+
+    /**
+     * Removes only the bossbar from a player.
+     */
+    private void removePlayerBossBar(Player player) {
         UUID playerId = player.getUniqueId();
         BossBar bossBar = playerBossBars.remove(playerId);
 
@@ -289,6 +355,48 @@ public class StormTracker extends BukkitRunnable {
     }
 
     /**
+     * Gets the best escape direction for a player inside a storm.
+     * Points away from storm center, unless storm is chasing faster than player can run.
+     */
+    private String getEscapeDirection(Player player, TravelingStorm storm) {
+        Location playerLoc = player.getLocation();
+        Location stormLoc = storm.getCurrentLocation();
+
+        // Calculate direction from storm center to player (away from storm)
+        double dx = playerLoc.getX() - stormLoc.getX();
+        double dz = playerLoc.getZ() - stormLoc.getZ();
+
+        // Get storm's current target waypoint to determine movement direction
+        Location targetLoc = storm.getTargetLocation();
+        double stormDx = targetLoc.getX() - stormLoc.getX();
+        double stormDz = targetLoc.getZ() - stormLoc.getZ();
+
+        // Normalize storm movement vector
+        double stormDistance = Math.sqrt(stormDx * stormDx + stormDz * stormDz);
+        if (stormDistance > 0) {
+            stormDx /= stormDistance;
+            stormDz /= stormDistance;
+        }
+
+        // Calculate dot product to see if storm is moving toward player
+        double dotProduct = (stormDx * dx) + (stormDz * dz);
+
+        // Player run speed ~5.6 blocks/s (walking), sprint ~7.0 blocks/s
+        double playerSpeed = 7.0;
+        double stormSpeed = storm.getMovementSpeed();
+
+        // If storm is chasing faster than player can run, flip the direction
+        if (dotProduct > 0 && stormSpeed > playerSpeed) {
+            // Storm catching up - run opposite direction (toward storm center, then through it)
+            dx = -dx;
+            dz = -dz;
+        }
+
+        // Convert to cardinal direction with arrow
+        return getDirectionWithArrow(dx, dz);
+    }
+
+    /**
      * Gets cardinal direction from player to target.
      */
     private String getDirection(Location from, Location to) {
@@ -303,6 +411,19 @@ public class StormTracker extends BukkitRunnable {
         // Convert to 8-direction cardinal
         int index = (int) Math.round(angle / 45.0) % 8;
         return DIRECTIONS[index];
+    }
+
+    /**
+     * Converts dx, dz to cardinal direction with Unicode arrow.
+     */
+    private String getDirectionWithArrow(double dx, double dz) {
+        double angle = Math.toDegrees(Math.atan2(dz, dx));
+        angle = (angle + 90) % 360;
+        if (angle < 0) angle += 360;
+
+        int index = (int) Math.round(angle / 45.0) % 8;
+        String[] arrows = {"↑", "↗", "→", "↘", "↓", "↙", "←", "↖"};
+        return arrows[index] + " " + DIRECTIONS[index];
     }
 
     /**

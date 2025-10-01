@@ -10,6 +10,8 @@ public class StormProfile {
     private final double maxDamagePerSecond;
     private final double minMovementSpeed;
     private final double maxMovementSpeed;
+    private final double minRadius;
+    private final double maxRadius;
     private final boolean blindness;
     private final int slownessAmplifier; // -1 = disabled
     private final double lightningStrikeChance; // 0.0-1.0
@@ -17,6 +19,7 @@ public class StormProfile {
     public StormProfile(StormType type, int minDurationSeconds, int maxDurationSeconds,
                        double minDamagePerSecond, double maxDamagePerSecond,
                        double minMovementSpeed, double maxMovementSpeed,
+                       double minRadius, double maxRadius,
                        boolean blindness, int slownessAmplifier, double lightningStrikeChance) {
         this.type = type;
         this.minDurationSeconds = minDurationSeconds;
@@ -27,6 +30,8 @@ public class StormProfile {
         this.damagePerSecond = (minDamagePerSecond + maxDamagePerSecond) / 2; // Used for display only
         this.minMovementSpeed = minMovementSpeed;
         this.maxMovementSpeed = maxMovementSpeed;
+        this.minRadius = minRadius;
+        this.maxRadius = maxRadius;
         this.blindness = blindness;
         this.slownessAmplifier = slownessAmplifier;
         this.lightningStrikeChance = lightningStrikeChance;
@@ -78,5 +83,13 @@ public class StormProfile {
 
     public double getMaxMovementSpeed() {
         return maxMovementSpeed;
+    }
+
+    public double getMinRadius() {
+        return minRadius;
+    }
+
+    public double getMaxRadius() {
+        return maxRadius;
     }
 }

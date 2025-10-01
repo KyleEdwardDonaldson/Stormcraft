@@ -18,6 +18,7 @@ import dev.ked.stormcraft.model.StormProfile;
 import dev.ked.stormcraft.model.StormType;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.WeatherType;
 import org.bukkit.scheduler.BukkitTask;
@@ -73,13 +74,14 @@ public class StormManager {
     }
 
     public void start() {
-        if (nextStormTimeMillis == 0) {
-            // Initialize burst timing if erratic spawning enabled
-            if (config.isErraticSpawningEnabled() && config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
-                scheduleNextBurst();
-            } else {
-                scheduleNextStorm();
-            }
+        // For erratic spawning mode, always seed initial storms on server start
+        if (config.isErraticSpawningEnabled() && config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            // Seed initial storm burst with varying lifetimes
+            spawnStormBurst(true);
+            scheduleNextBurst();
+        } else if (nextStormTimeMillis == 0) {
+            // Traditional storm system - only initialize if not loaded from data
+            scheduleNextStorm();
         }
 
         // Start periodic check for storm scheduling (every 20 ticks = 1 second)
@@ -134,7 +136,7 @@ public class StormManager {
         // Check for erratic burst spawning
         if (config.isErraticSpawningEnabled() && config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
             if (now >= nextBurstTimeMillis) {
-                spawnStormBurst();
+                spawnStormBurst(false);
                 scheduleNextBurst();
             }
             return;
@@ -277,7 +279,7 @@ public class StormManager {
             }
 
             travelingStormManager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
-            travelingStormManager.startTravelingStorm(upcomingProfile, actualDuration, actualDamage, world, this::endStorm);
+            travelingStormManager.startTravelingStorm(upcomingProfile, actualDuration, actualDamage, world, actualDuration, this::endStorm);
             travelingStorm = travelingStormManager.getActiveStorm();
         } else {
             // Use traditional stationary storm system
@@ -326,7 +328,7 @@ public class StormManager {
 
         // Start storm tracker (for traveling storms)
         if (useTravelingStorm) {
-            stormTracker = new dev.ked.stormcraft.ui.StormTracker(plugin, config, zoneManager);
+            stormTracker = new dev.ked.stormcraft.ui.StormTracker(plugin, config, zoneManager, plugin.getUIPreferences());
             stormTracker.setActiveStorm(travelingStorm);
             int trackerInterval = config.getStormTrackerUpdateInterval();
             stormTracker.runTaskTimer(plugin, 0L, trackerInterval);
@@ -340,9 +342,31 @@ public class StormManager {
 
     /**
      * Spawns a burst of traveling storms (erratic spawning mode).
+     * @param isInitialSeed If true, storms will have varying time remaining to simulate already-active storms
      */
-    private void spawnStormBurst() {
-        int burstSize = selectWeightedBurstSize();
+    private void spawnStormBurst(boolean isInitialSeed) {
+        int maxConcurrent = config.getMaxConcurrentStorms();
+
+        // For initial seed, spawn ~70% of max concurrent storms
+        int burstSize = isInitialSeed ? (int) (maxConcurrent * 0.7) : selectWeightedBurstSize();
+
+        if (config.isLogScheduling()) {
+            plugin.getLogger().info("Spawning storm burst: isInitialSeed=" + isInitialSeed +
+                    ", burstSize=" + burstSize + ", maxConcurrent=" + maxConcurrent);
+        }
+
+        int currentCount = activeStorms.size();
+
+        // Limit burst size to not exceed max concurrent storms
+        if (currentCount >= maxConcurrent) {
+            if (config.isLogScheduling()) {
+                plugin.getLogger().info("Skipping storm burst: Already at max concurrent storms (" + currentCount + "/" + maxConcurrent + ")");
+            }
+            return;
+        }
+
+        // Reduce burst size if it would exceed the limit
+        int actualBurstSize = Math.min(burstSize, maxConcurrent - currentCount);
 
         // Get world with null check
         World world = null;
@@ -357,10 +381,10 @@ public class StormManager {
         }
 
         if (config.isLogScheduling()) {
-            plugin.getLogger().info("Spawning storm burst: " + burstSize + " storms in world: " + world.getName());
+            plugin.getLogger().info("Spawning storm burst: " + actualBurstSize + " storms (total: " + (currentCount + actualBurstSize) + "/" + maxConcurrent + ") in world: " + world.getName());
         }
 
-        for (int i = 0; i < burstSize; i++) {
+        for (int i = 0; i < actualBurstSize; i++) {
             StormProfile profile = selectRandomStormProfile();
 
             // Randomize duration
@@ -373,9 +397,24 @@ public class StormManager {
             double maxDamage = profile.getMaxDamagePerSecond();
             double actualDamage = minDamage + (ThreadLocalRandom.current().nextDouble() * (maxDamage - minDamage));
 
+            // For initial seed, randomize remaining time to simulate storms already in progress
+            int initialRemainingSeconds = actualDuration;
+            if (isInitialSeed) {
+                // Storms can be anywhere from 10% to 100% of their lifetime remaining
+                double remainingPercent = 0.1 + (ThreadLocalRandom.current().nextDouble() * 0.9);
+                initialRemainingSeconds = (int) (actualDuration * remainingPercent);
+
+                if (config.isLogScheduling()) {
+                    plugin.getLogger().info("Initial seed storm: duration=" + actualDuration +
+                            "s, remaining=" + initialRemainingSeconds + "s (" +
+                            String.format("%.0f", remainingPercent * 100) + "%), damage=" +
+                            String.format("%.1f", actualDamage) + " HP/s");
+                }
+            }
+
             // Create individual storm manager
             TravelingStormManager manager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
-            manager.startTravelingStorm(profile, actualDuration, actualDamage, world, () -> onStormEnd(manager));
+            manager.startTravelingStorm(profile, actualDuration, actualDamage, world, initialRemainingSeconds, () -> onStormEnd(manager));
             activeStormManagers.add(manager);
 
             TravelingStorm storm = manager.getActiveStorm();
@@ -440,7 +479,7 @@ public class StormManager {
         }
 
         // Start storm tracker (shows closest storm)
-        stormTracker = new dev.ked.stormcraft.ui.StormTracker(plugin, config, zoneManager);
+        stormTracker = new dev.ked.stormcraft.ui.StormTracker(plugin, config, zoneManager, plugin.getUIPreferences());
         stormTracker.setActiveStorms(activeStorms);
         int trackerInterval = config.getStormTrackerUpdateInterval();
         stormTracker.runTaskTimer(plugin, 0L, trackerInterval);
@@ -575,6 +614,8 @@ public class StormManager {
                     upcomingProfile.getMaxDamagePerSecond(),
                     upcomingProfile.getMinMovementSpeed(),
                     upcomingProfile.getMaxMovementSpeed(),
+                    upcomingProfile.getMinRadius(),
+                    upcomingProfile.getMaxRadius(),
                     upcomingProfile.hasBlindness(),
                     upcomingProfile.getSlownessAmplifier(),
                     upcomingProfile.getLightningStrikeChance()
@@ -608,8 +649,14 @@ public class StormManager {
 
     /**
      * Sets storm weather in all enabled worlds.
+     * Skipped for traveling storms (localized weather only).
      */
     private void setStormWeather() {
+        // Skip global weather for traveling storms
+        if (config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            return;
+        }
+
         for (String worldName : config.getEnabledWorlds()) {
             World world = Bukkit.getWorld(worldName);
             if (world != null) {
@@ -622,8 +669,14 @@ public class StormManager {
 
     /**
      * Clears storm weather in all enabled worlds.
+     * Skipped for traveling storms (localized weather only).
      */
     private void clearStormWeather() {
+        // Skip global weather for traveling storms
+        if (config.isTravelingStormsEnabled() && zoneManager.isEnabled()) {
+            return;
+        }
+
         for (String worldName : config.getEnabledWorlds()) {
             World world = Bukkit.getWorld(worldName);
             if (world != null) {
@@ -760,6 +813,22 @@ public class StormManager {
      */
     public boolean hasActiveStorms() {
         return !activeStorms.isEmpty();
+    }
+
+    /**
+     * Checks if a location is inside any active storm.
+     */
+    public boolean isLocationInAnyStorm(Location location) {
+        for (TravelingStorm storm : activeStorms) {
+            Location stormLoc = storm.getCurrentLocation();
+            if (stormLoc.getWorld().equals(location.getWorld())) {
+                double distance = location.distance(stormLoc);
+                if (distance <= storm.getDamageRadius()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public enum StormPhase {

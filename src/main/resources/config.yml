@@ -201,6 +201,10 @@ stormTracker:
   range: 1000  # Distance in blocks to show storm tracker (1000 blocks = 3.3 min warning at 5 b/s)
   updateInterval: 20  # Update frequency in ticks (20 = 1 second)
 
+# Custom welcome message on player join
+customWelcome:
+  enabled: true  # Set to false to disable custom welcome message
+
 debug:
   logExposureSamples: false
   logScheduling: false

@@ -80,7 +80,7 @@ public class StormsCommand implements CommandExecutor {
                 .append(Component.text(" (" + storms.size() + " total)", NamedTextColor.GRAY))
                 .append(Component.text(" ════", NamedTextColor.DARK_GRAY)));
 
-        // Sort storms by distance if sender is a player
+        // Sort storms by distance to edge if sender is a player
         java.util.List<TravelingStorm> sortedStorms = new java.util.ArrayList<>(storms);
         if (sender instanceof Player player) {
             sortedStorms.sort((s1, s2) -> {
@@ -88,9 +88,15 @@ public class StormsCommand implements CommandExecutor {
                 Location loc2 = s2.getCurrentLocation();
                 if (!loc1.getWorld().equals(player.getWorld())) return 1;
                 if (!loc2.getWorld().equals(player.getWorld())) return -1;
-                double dist1 = player.getLocation().distance(loc1);
-                double dist2 = player.getLocation().distance(loc2);
-                return Double.compare(dist1, dist2);
+
+                // Calculate distance to edge (0 if inside storm)
+                double distToCenter1 = player.getLocation().distance(loc1);
+                double distToEdge1 = Math.max(0, distToCenter1 - s1.getDamageRadius());
+
+                double distToCenter2 = player.getLocation().distance(loc2);
+                double distToEdge2 = Math.max(0, distToCenter2 - s2.getDamageRadius());
+
+                return Double.compare(distToEdge1, distToEdge2);
             });
         }
 
@@ -113,12 +119,12 @@ public class StormsCommand implements CommandExecutor {
             Component.text("#" + number + " ", NamedTextColor.DARK_GRAY) :
             Component.empty();
 
+        // Calculate storm size category based on radius
+        String sizeCategory = getStormSizeCategory(storm.getDamageRadius());
+
         Component message = prefix
                 .append(Component.text("⛈ ", NamedTextColor.YELLOW))
-                .append(Component.text("Traveling Storm", NamedTextColor.WHITE, TextDecoration.BOLD))
-                .append(Component.newline())
-                .append(Component.text("  Type: ", NamedTextColor.GRAY))
-                .append(Component.text(formatStormType(storm.getProfile().getType().name()), NamedTextColor.WHITE))
+                .append(Component.text(sizeCategory, NamedTextColor.WHITE))
                 .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
                 .append(Component.text("Time: ", NamedTextColor.GRAY))
                 .append(Component.text(formatTime(storm.getRemainingSeconds()), NamedTextColor.YELLOW))
@@ -135,17 +141,24 @@ public class StormsCommand implements CommandExecutor {
         // Add distance if sender is a player
         if (sender instanceof Player player) {
             if (loc.getWorld().equals(player.getWorld())) {
-                double distance = player.getLocation().distance(loc);
-                String direction = getDirection(player.getLocation(), loc);
-                NamedTextColor distColor = getDistanceColor(distance);
+                double distanceToCenter = player.getLocation().distance(loc);
+                double damageRadius = storm.getDamageRadius();
+                double distanceToEdge = Math.max(0, distanceToCenter - damageRadius);
 
-                message = message.append(Component.text(" | ", NamedTextColor.DARK_GRAY))
-                        .append(Component.text("Your Distance: ", NamedTextColor.GRAY))
-                        .append(Component.text(direction + " ", NamedTextColor.WHITE))
-                        .append(Component.text((int)distance + "m", distColor));
+                message = message.append(Component.text(" | ", NamedTextColor.DARK_GRAY));
 
-                if (distance <= config.getStormDamageRadius()) {
-                    message = message.append(Component.text(" ⚡", NamedTextColor.RED, TextDecoration.BOLD));
+                if (distanceToEdge == 0) {
+                    // Player is inside the storm
+                    message = message.append(Component.text("YOU ARE IN THIS STORM ", NamedTextColor.RED, TextDecoration.BOLD))
+                            .append(Component.text("⚡", NamedTextColor.YELLOW, TextDecoration.BOLD));
+                } else {
+                    // Player is outside, show distance to edge
+                    String direction = getDirection(player.getLocation(), loc);
+                    NamedTextColor distColor = getDistanceColor(distanceToEdge);
+
+                    message = message.append(Component.text("Distance: ", NamedTextColor.GRAY))
+                            .append(Component.text(direction + " ", NamedTextColor.WHITE))
+                            .append(Component.text((int)distanceToEdge + "m", distColor));
                 }
             }
         }
@@ -203,5 +216,14 @@ public class StormsCommand implements CommandExecutor {
             case "LONG_DANGEROUS" -> "Long Dangerous";
             default -> type;
         };
+    }
+
+    private String getStormSizeCategory(double radius) {
+        if (radius < 600) return "Tiny";
+        else if (radius < 1000) return "Small";
+        else if (radius < 1500) return "Medium";
+        else if (radius < 2000) return "Large";
+        else if (radius < 2500) return "Huge";
+        else return "Massive";
     }
 }

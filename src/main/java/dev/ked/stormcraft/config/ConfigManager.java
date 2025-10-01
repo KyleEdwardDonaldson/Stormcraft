@@ -68,6 +68,7 @@ public class ConfigManager {
     private boolean erraticSpawningEnabled;
     private int minBurstSize;
     private int maxBurstSize;
+    private int maxConcurrentStorms;
     private int minBurstDelaySeconds;
     private int maxBurstDelaySeconds;
     private Map<Integer, Double> burstChanceWeights;
@@ -175,13 +176,15 @@ public class ConfigManager {
                     double maxDps = typeSection.getDouble("maxDamagePerSecond", 3.0);
                     double minSpeed = typeSection.getDouble("minMovementSpeed", 0.1);
                     double maxSpeed = typeSection.getDouble("maxMovementSpeed", 1.0);
+                    double minRadius = typeSection.getDouble("minRadius", 500.0);
+                    double maxRadius = typeSection.getDouble("maxRadius", 1500.0);
 
                     ConfigurationSection effectsSection = typeSection.getConfigurationSection("extraEffects");
                     boolean blindness = effectsSection != null && effectsSection.getBoolean("blindness", false);
                     int slowness = effectsSection != null ? effectsSection.getInt("slownessAmplifier", -1) : -1;
                     double lightning = effectsSection != null ? effectsSection.getDouble("lightningStrikeChance", 0.0) : 0.0;
 
-                    damageProfiles.put(type, new StormProfile(type, minDuration, maxDuration, minDps, maxDps, minSpeed, maxSpeed, blindness, slowness, lightning));
+                    damageProfiles.put(type, new StormProfile(type, minDuration, maxDuration, minDps, maxDps, minSpeed, maxSpeed, minRadius, maxRadius, blindness, slowness, lightning));
                 }
             }
         }
@@ -249,6 +252,7 @@ public class ConfigManager {
                 erraticSpawningEnabled = erraticSection.getBoolean("enabled", true);
                 minBurstSize = erraticSection.getInt("minBurstSize", 1);
                 maxBurstSize = erraticSection.getInt("maxBurstSize", 6);
+                maxConcurrentStorms = erraticSection.getInt("maxConcurrentStorms", 12);
                 minBurstDelaySeconds = erraticSection.getInt("minDelaySeconds", 180);
                 maxBurstDelaySeconds = erraticSection.getInt("maxDelaySeconds", 900);
 
@@ -266,6 +270,7 @@ public class ConfigManager {
                 erraticSpawningEnabled = false;
                 minBurstSize = 1;
                 maxBurstSize = 1;
+                maxConcurrentStorms = 12;
                 minBurstDelaySeconds = 900;
                 maxBurstDelaySeconds = 2400;
                 burstChanceWeights = new HashMap<>();
@@ -515,6 +520,7 @@ public class ConfigManager {
     public Set<GameMode> getIgnoreGameModes() { return ignoreGameModes; }
     public int getIgnoreIfUnderBlocksMinDepth() { return ignoreIfUnderBlocksMinDepth; }
     public boolean isWorldGuardProtection() { return worldGuardProtection; }
+    public boolean isCustomWelcomeEnabled() { return config.getBoolean("customWelcome.enabled", true); }
     public boolean isLogExposureSamples() { return logExposureSamples; }
     public boolean isLogScheduling() { return logScheduling; }
     public boolean isBStats() { return bStats; }
@@ -541,6 +547,7 @@ public class ConfigManager {
     public boolean isErraticSpawningEnabled() { return erraticSpawningEnabled; }
     public int getMinBurstSize() { return minBurstSize; }
     public int getMaxBurstSize() { return maxBurstSize; }
+    public int getMaxConcurrentStorms() { return maxConcurrentStorms; }
     public int getMinBurstDelaySeconds() { return minBurstDelaySeconds; }
     public int getMaxBurstDelaySeconds() { return maxBurstDelaySeconds; }
     public Map<Integer, Double> getBurstChanceWeights() { return burstChanceWeights; }

@@ -1,6 +1,7 @@
 package dev.ked.stormcraft;
 
 import dev.ked.stormcraft.command.StormcraftCommand;
+import dev.ked.stormcraft.compass.CompassManager;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.config.PersistenceManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
@@ -9,6 +10,7 @@ import dev.ked.stormcraft.integration.PlaceholderAPIIntegration;
 import dev.ked.stormcraft.integration.SquaremapIntegration;
 import dev.ked.stormcraft.integration.VaultIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
+import dev.ked.stormcraft.listener.PlayerJoinListener;
 import dev.ked.stormcraft.listener.WeatherControlListener;
 import dev.ked.stormcraft.schedule.StormManager;
 import dev.ked.stormcraft.zones.ZoneManager;
@@ -31,6 +33,8 @@ public class StormcraftPlugin extends JavaPlugin {
     private PlayerExposureUtil exposureUtil;
     private StormManager stormManager;
     private PlaceholderAPIIntegration placeholderAPIIntegration;
+    private dev.ked.stormcraft.ui.StormUIPreferences uiPreferences;
+    private CompassManager compassManager;
 
     private BukkitTask autosaveTask;
 
@@ -44,6 +48,9 @@ public class StormcraftPlugin extends JavaPlugin {
 
         // Initialize persistence
         persistenceManager = new PersistenceManager(this, configManager);
+
+        // Initialize UI preferences
+        uiPreferences = new dev.ked.stormcraft.ui.StormUIPreferences(this);
 
         // Initialize integrations
         worldGuardIntegration = new WorldGuardIntegration(this);
@@ -87,6 +94,11 @@ public class StormcraftPlugin extends JavaPlugin {
         // Start storm manager
         stormManager.start();
 
+        // Initialize and start compass manager
+        compassManager = new CompassManager(this, configManager, stormManager);
+        compassManager.start();
+        getLogger().info("Compass navigation enabled - compasses point away from storms");
+
         // Register listeners
         registerListeners();
 
@@ -112,6 +124,11 @@ public class StormcraftPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         getLogger().info("Shutting down Stormcraft...");
+
+        // Stop compass manager
+        if (compassManager != null) {
+            compassManager.shutdown();
+        }
 
         // Stop storm manager
         if (stormManager != null) {
@@ -140,23 +157,20 @@ public class StormcraftPlugin extends JavaPlugin {
         // Register weather control listener to prevent vanilla rain/thunder
         WeatherControlListener weatherListener = new WeatherControlListener(this, configManager, stormManager);
         Bukkit.getPluginManager().registerEvents(weatherListener, this);
+
+        // Register player join listener for storm info message
+        PlayerJoinListener joinListener = new PlayerJoinListener(this, configManager, stormManager);
+        Bukkit.getPluginManager().registerEvents(joinListener, this);
     }
 
     private void registerCommands() {
         StormcraftCommand commandHandler = new StormcraftCommand(this, configManager, stormManager);
+        dev.ked.stormcraft.command.StormCommand stormHandler = new dev.ked.stormcraft.command.StormCommand(this, configManager, stormManager, commandHandler);
         dev.ked.stormcraft.command.StormsCommand stormsHandler = new dev.ked.stormcraft.command.StormsCommand(this, configManager, stormManager);
-
-        PluginCommand stormcraftCmd = getCommand("stormcraft");
-        if (stormcraftCmd != null) {
-            stormcraftCmd.setExecutor(commandHandler);
-            stormcraftCmd.setTabCompleter(commandHandler);
-        } else {
-            getLogger().warning("Failed to register /stormcraft command!");
-        }
 
         PluginCommand stormCmd = getCommand("storm");
         if (stormCmd != null) {
-            stormCmd.setExecutor(commandHandler);
+            stormCmd.setExecutor(stormHandler);
             stormCmd.setTabCompleter(commandHandler);
         } else {
             getLogger().warning("Failed to register /storm command!");
@@ -224,5 +238,9 @@ public class StormcraftPlugin extends JavaPlugin {
 
     public WorldGuardIntegration getWorldGuardIntegration() {
         return worldGuardIntegration;
+    }
+
+    public dev.ked.stormcraft.ui.StormUIPreferences getUIPreferences() {
+        return uiPreferences;
     }
 }

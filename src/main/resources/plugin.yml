@@ -17,15 +17,9 @@ softdepend:
   - squaremap
 
 commands:
-  stormcraft:
-    description: Stormcraft status and admin controls
-    usage: "/stormcraft [start|stop|next|reload|testdamage|weights]"
-    aliases: [sc]
-    permission: stormcraft.view
-    permission-message: "&cYou don't have permission."
   storm:
-    description: Check closest storm status
-    usage: "/storm"
+    description: Stormcraft status and admin controls
+    usage: "/storm [start|stop|next|reload|testdamage|weights|ui]"
     permission: stormcraft.view
     permission-message: "&cYou don't have permission."
   storms:

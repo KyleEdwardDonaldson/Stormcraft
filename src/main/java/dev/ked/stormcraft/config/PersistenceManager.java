@@ -42,13 +42,15 @@ public class PersistenceManager {
         // Save active storm if present
         if (stormManager.hasActiveStorm()) {
             ActiveStorm storm = stormManager.getActiveStorm();
-            JsonObject stormData = new JsonObject();
-            stormData.addProperty("type", storm.getProfile().getType().name());
-            stormData.addProperty("originalDurationSeconds", storm.getOriginalDurationSeconds());
-            stormData.addProperty("remainingSeconds", storm.getRemainingSeconds());
-            stormData.addProperty("startTimeMillis", storm.getStartTimeMillis());
-            stormData.addProperty("actualDamagePerSecond", storm.getActualDamagePerSecond());
-            data.add("activeStorm", stormData);
+            if (storm != null) {
+                JsonObject stormData = new JsonObject();
+                stormData.addProperty("type", storm.getProfile().getType().name());
+                stormData.addProperty("originalDurationSeconds", storm.getOriginalDurationSeconds());
+                stormData.addProperty("remainingSeconds", storm.getRemainingSeconds());
+                stormData.addProperty("startTimeMillis", storm.getStartTimeMillis());
+                stormData.addProperty("actualDamagePerSecond", storm.getActualDamagePerSecond());
+                data.add("activeStorm", stormData);
+            }
         }
 
         // Save countdown if present

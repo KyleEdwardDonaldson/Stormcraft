@@ -23,7 +23,9 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -127,31 +129,67 @@ public class DamageTask extends BukkitRunnable {
 
     /**
      * Handles damage checks for multiple simultaneous storms.
+     * DPS from multiple overlapping storms stacks together.
      */
     private void runMultiStormCheck() {
         List<Player> exposedPlayers = new ArrayList<>();
+        Map<Player, Double> playerTotalDamage = new HashMap<>();
+        Map<Player, StormProfile> playerStrongestProfile = new HashMap<>();
 
         // Check all online players against all active storms
         for (Player player : Bukkit.getOnlinePlayers()) {
-            TravelingStorm closestStorm = findClosestStormToPlayer(player);
-            if (closestStorm != null && isPlayerExposedToMultiStorm(player, closestStorm)) {
-                exposedPlayers.add(player);
+            double totalDamage = 0;
+            StormProfile strongestProfile = null;
+            double maxDamage = 0;
 
-                // Apply effects from the closest storm
-                applyStormEffects(player, closestStorm.getProfile(), closestStorm.getCurrentDamagePerSecond());
-                awardEssence(player, closestStorm.getProfile());
+            // Check player against each storm
+            for (TravelingStorm storm : activeStorms) {
+                if (isPlayerExposedToMultiStorm(player, storm)) {
+                    double stormDamage = storm.getCurrentDamagePerSecond();
+                    totalDamage += stormDamage;
+
+                    // Track strongest storm for effects/essence
+                    if (stormDamage > maxDamage) {
+                        maxDamage = stormDamage;
+                        strongestProfile = storm.getProfile();
+                    }
+                }
+            }
+
+            // Apply stacked damage if exposed to any storms
+            if (totalDamage > 0 && strongestProfile != null) {
+                exposedPlayers.add(player);
+                playerTotalDamage.put(player, totalDamage);
+                playerStrongestProfile.put(player, strongestProfile);
             }
         }
 
-        // Apply damage to exposed mobs
+        // Apply damage and effects to exposed players
+        for (Player player : exposedPlayers) {
+            double totalDamage = playerTotalDamage.get(player);
+            StormProfile profile = playerStrongestProfile.get(player);
+
+            applyStormEffects(player, profile, totalDamage);
+            awardEssence(player, profile);
+        }
+
+        // Apply damage to exposed mobs (stack damage from all storms)
         for (String worldName : config.getEnabledWorlds()) {
             World world = Bukkit.getWorld(worldName);
             if (world != null) {
                 for (LivingEntity entity : world.getLivingEntities()) {
                     if (!(entity instanceof Player)) {
-                        TravelingStorm closestStorm = findClosestStormToLocation(entity.getLocation());
-                        if (closestStorm != null && isEntityExposedToMultiStorm(entity, closestStorm)) {
-                            applyMobDamage(entity, closestStorm.getCurrentDamagePerSecond());
+                        double totalDamage = 0;
+
+                        // Check entity against each storm
+                        for (TravelingStorm storm : activeStorms) {
+                            if (isEntityExposedToMultiStorm(entity, storm)) {
+                                totalDamage += storm.getCurrentDamagePerSecond();
+                            }
+                        }
+
+                        if (totalDamage > 0) {
+                            applyMobDamage(entity, totalDamage);
                         }
                     }
                 }
@@ -324,11 +362,7 @@ public class DamageTask extends BukkitRunnable {
             player.setHealth(newHealth);
         }
 
-        // Apply blindness
-        if (profile.hasBlindness()) {
-            int duration = checkInterval + 10; // Slightly longer than check interval
-            player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, duration, 0, false, false, false));
-        }
+        // Blindness effect removed - too disruptive for gameplay
 
         // Apply slowness
         if (profile.getSlownessAmplifier() >= 0) {
