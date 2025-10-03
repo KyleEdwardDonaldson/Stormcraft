@@ -5,13 +5,12 @@ import dev.ked.stormcraft.command.StormcraftCommand;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.config.PersistenceManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
-import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.integration.PlaceholderAPIIntegration;
-import dev.ked.stormcraft.integration.SquaremapIntegration;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.listener.PlayerJoinListener;
 import dev.ked.stormcraft.listener.WeatherControlListener;
 import dev.ked.stormcraft.schedule.StormManager;
+import dev.ked.stormcraft.zones.BossArenaManager;
 import dev.ked.stormcraft.zones.ZoneManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -27,7 +26,6 @@ public class StormcraftPlugin extends JavaPlugin {
     private PersistenceManager persistenceManager;
     private WorldGuardIntegration worldGuardIntegration;
     private ZoneManager zoneManager;
-    private SquaremapIntegration squaremapIntegration;
     private PlayerExposureUtil exposureUtil;
     private StormManager stormManager;
     private PlaceholderAPIIntegration placeholderAPIIntegration;
@@ -52,31 +50,12 @@ public class StormcraftPlugin extends JavaPlugin {
         // Initialize integrations
         worldGuardIntegration = new WorldGuardIntegration(this);
 
-        // Initialize zone system
-        zoneManager = new ZoneManager(this, configManager);
-        if (zoneManager.isEnabled()) {
-            getLogger().info("Zone system enabled: Stormlands, Storm Zone, Safe Zone");
-        }
-
-        // Initialize map integration (squaremap only)
-        if (Bukkit.getPluginManager().getPlugin("squaremap") != null) {
-            try {
-                squaremapIntegration = new SquaremapIntegration(this, zoneManager);
-                if (squaremapIntegration.initialize()) {
-                    getLogger().info("squaremap visualization enabled.");
-                }
-            } catch (NoClassDefFoundError e) {
-                getLogger().warning("squaremap plugin found but API not available: " + e.getMessage());
-            }
-        }
-
-        // Create map integration manager
-        MapIntegrationManager mapIntegrationManager = new MapIntegrationManager(squaremapIntegration);
+        // Initialize zone system (WorldGuard regions have priority over circular zones)
+        zoneManager = new ZoneManager(this, configManager, worldGuardIntegration);
 
         // Initialize core systems
         exposureUtil = new PlayerExposureUtil(this, configManager);
-        stormManager = new StormManager(this, configManager, exposureUtil, worldGuardIntegration,
-                                       zoneManager, mapIntegrationManager);
+        stormManager = new StormManager(this, configManager, exposureUtil, worldGuardIntegration, zoneManager);
 
         // Load saved state
         persistenceManager.loadState(stormManager);

@@ -6,7 +6,6 @@ import dev.ked.stormcraft.api.events.StormcraftStormEndEvent;
 import dev.ked.stormcraft.api.events.StormcraftStormStartEvent;
 import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
-import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.model.ActiveStorm;
 import dev.ked.stormcraft.model.TravelingStorm;
@@ -34,7 +33,6 @@ public class StormManager {
     private final PlayerExposureUtil exposureUtil;
     private final WorldGuardIntegration worldGuardIntegration;
     private final ZoneManager zoneManager;
-    private final MapIntegrationManager mapIntegrationManager;
     private final Random random = new Random();
 
     // Storm state
@@ -60,14 +58,12 @@ public class StormManager {
 
     public StormManager(StormcraftPlugin plugin, ConfigManager config,
                        PlayerExposureUtil exposureUtil, WorldGuardIntegration worldGuardIntegration,
-                       ZoneManager zoneManager,
-                       MapIntegrationManager mapIntegrationManager) {
+                       ZoneManager zoneManager) {
         this.plugin = plugin;
         this.config = config;
         this.exposureUtil = exposureUtil;
         this.worldGuardIntegration = worldGuardIntegration;
         this.zoneManager = zoneManager;
-        this.mapIntegrationManager = mapIntegrationManager;
     }
 
     public void start() {
@@ -275,7 +271,7 @@ public class StormManager {
                 plugin.getLogger().warning("Configured world not found for storm spawn. Using default world: " + world.getName());
             }
 
-            travelingStormManager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
+            travelingStormManager = new TravelingStormManager(plugin, config, zoneManager);
             travelingStormManager.startTravelingStorm(upcomingProfile, actualDuration, actualDamage, world, actualDuration, this::endStorm);
             travelingStorm = travelingStormManager.getActiveStorm();
         } else {
@@ -410,7 +406,7 @@ public class StormManager {
             }
 
             // Create individual storm manager
-            TravelingStormManager manager = new TravelingStormManager(plugin, config, zoneManager, mapIntegrationManager);
+            TravelingStormManager manager = new TravelingStormManager(plugin, config, zoneManager);
             manager.startTravelingStorm(profile, actualDuration, actualDamage, world, initialRemainingSeconds, () -> onStormEnd(manager));
             activeStormManagers.add(manager);
 
@@ -813,6 +809,13 @@ public class StormManager {
     }
 
     /**
+     * Gets the current DamageTask instance.
+     */
+    public DamageTask getDamageTask() {
+        return damageTask;
+    }
+
+    /**
      * Checks if a location is inside any active storm.
      */
     public boolean isLocationInAnyStorm(Location location) {
@@ -820,7 +823,7 @@ public class StormManager {
             Location stormLoc = storm.getCurrentLocation();
             if (stormLoc.getWorld().equals(location.getWorld())) {
                 double distance = location.distance(stormLoc);
-                if (distance <= storm.getDamageRadius()) {
+                if (distance <= storm.getCurrentRadius()) {
                     return true;
                 }
             }

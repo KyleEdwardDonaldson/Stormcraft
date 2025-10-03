@@ -124,11 +124,14 @@ public class StormCommand implements CommandExecutor {
                 .append(Component.text("Type: ", NamedTextColor.GRAY))
                 .append(Component.text(formatStormType(storm.getProfile().getType().name()), NamedTextColor.WHITE))
                 .append(Component.newline())
+                .append(Component.text("Phase: ", NamedTextColor.GRAY))
+                .append(Component.text(storm.getCurrentPhase().getSymbol() + " " + storm.getCurrentPhase().getDisplayName(), getPhaseColor(storm.getCurrentPhase())))
+                .append(Component.newline())
                 .append(Component.text("Remaining: ", NamedTextColor.GRAY))
                 .append(Component.text(formatTime(storm.getRemainingSeconds()), NamedTextColor.YELLOW))
                 .append(Component.newline())
                 .append(Component.text("Damage: ", NamedTextColor.GRAY))
-                .append(Component.text(String.format("%.1f HP/s", storm.getCurrentDamagePerSecond()), NamedTextColor.RED));
+                .append(Component.text(String.format("%.1f HP/s (%.0f%%)", storm.getCurrentDamagePerSecond(), storm.getPhaseMultiplier() * 100), NamedTextColor.RED));
 
         // Add location info
         Location loc = storm.getCurrentLocation();
@@ -202,6 +205,14 @@ public class StormCommand implements CommandExecutor {
             case "MEDIUM" -> "Medium";
             case "LONG_DANGEROUS" -> "Long Dangerous";
             default -> type;
+        };
+    }
+
+    private NamedTextColor getPhaseColor(dev.ked.stormcraft.model.StormPhase phase) {
+        return switch (phase) {
+            case FORMING -> NamedTextColor.GRAY;
+            case PEAK -> NamedTextColor.RED;
+            case DISSIPATING -> NamedTextColor.DARK_GRAY;
         };
     }
 

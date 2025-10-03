@@ -2,16 +2,19 @@ package dev.ked.stormcraft.zones;
 
 import dev.ked.stormcraft.StormcraftPlugin;
 import dev.ked.stormcraft.config.ConfigManager;
+import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import org.bukkit.Location;
 import org.bukkit.World;
 
 /**
  * Manages zone boundaries and determines which zone a location is in.
- * Zones are circular regions radiating from a center point.
+ * Prioritizes WorldGuard regions (stormlands, stormzone, safezone) over circular zones.
+ * Circular zones are used as fallback if WorldGuard is not available or regions not found.
  */
 public class ZoneManager {
     private final StormcraftPlugin plugin;
     private final ConfigManager config;
+    private final WorldGuardIntegration worldGuardIntegration;
 
     // Zone center coordinates
     private double centerX;
@@ -28,17 +31,44 @@ public class ZoneManager {
     private ZoneSettings safeZoneSettings;
 
     private boolean enabled;
+    private boolean usingWorldGuardRegions = false;
 
-    public ZoneManager(StormcraftPlugin plugin, ConfigManager config) {
+    public ZoneManager(StormcraftPlugin plugin, ConfigManager config, WorldGuardIntegration worldGuardIntegration) {
         this.plugin = plugin;
         this.config = config;
+        this.worldGuardIntegration = worldGuardIntegration;
         loadZoneConfig();
     }
 
     public void loadZoneConfig() {
         this.enabled = config.isZoneSystemEnabled();
 
+        // Load zone settings regardless (used for damage multipliers, etc.)
+        this.stormlandsSettings = config.getStormlandsSettings();
+        this.stormZoneSettings = config.getStormZoneSettings();
+        this.safeZoneSettings = config.getSafeZoneSettings();
+
+        // Check if WorldGuard regions are available (priority)
+        if (worldGuardIntegration.isEnabled()) {
+            World world = plugin.getServer().getWorlds().get(0); // Primary world
+            boolean hasStormlands = worldGuardIntegration.hasRegion(world, "stormlands");
+            boolean hasStormZone = worldGuardIntegration.hasRegion(world, "stormzone");
+            boolean hasSafeZone = worldGuardIntegration.hasRegion(world, "safezone");
+
+            if (hasStormlands && hasStormZone && hasSafeZone) {
+                usingWorldGuardRegions = true;
+                plugin.getLogger().info("Zone system: Using WorldGuard regions (stormlands, stormzone, safezone)");
+                return;
+            } else if (hasStormlands || hasStormZone || hasSafeZone) {
+                plugin.getLogger().warning("Zone system: Some WorldGuard regions found but not all three (stormlands, stormzone, safezone). Falling back to circular zones.");
+            }
+        }
+
+        // Fallback to circular zones
+        usingWorldGuardRegions = false;
+
         if (!enabled) {
+            plugin.getLogger().info("Zone system: Disabled (circular zones not enabled, WorldGuard regions not found)");
             return;
         }
 
@@ -54,22 +84,32 @@ public class ZoneManager {
         this.stormZoneRadiusSquared = stormZoneRadius * stormZoneRadius;
         this.safeZoneRadiusSquared = safeZoneRadius * safeZoneRadius;
 
-        // Load zone settings
-        this.stormlandsSettings = config.getStormlandsSettings();
-        this.stormZoneSettings = config.getStormZoneSettings();
-        this.safeZoneSettings = config.getSafeZoneSettings();
-
-        plugin.getLogger().info("Zone system enabled: Stormlands=" + stormlandsRadius +
+        plugin.getLogger().info("Zone system: Using circular zones - Stormlands=" + stormlandsRadius +
                                ", StormZone=" + stormZoneRadius +
                                ", SafeZone=" + safeZoneRadius);
     }
 
     /**
      * Determines which zone a location is in.
+     * Prioritizes WorldGuard regions, falls back to circular zones.
      * @param location The location to check
      * @return The zone type
      */
     public ZoneType getZoneAt(Location location) {
+        // Use WorldGuard regions if available
+        if (usingWorldGuardRegions) {
+            if (worldGuardIntegration.isInRegion(location, "stormlands")) {
+                return ZoneType.STORMLANDS;
+            } else if (worldGuardIntegration.isInRegion(location, "stormzone")) {
+                return ZoneType.STORM_ZONE;
+            } else if (worldGuardIntegration.isInRegion(location, "safezone")) {
+                return ZoneType.SAFE_ZONE;
+            }
+            // If not in any defined region, default to safe zone
+            return ZoneType.SAFE_ZONE;
+        }
+
+        // Fallback to circular zones
         if (!enabled) {
             return ZoneType.SAFE_ZONE; // Default to safe if zones disabled
         }
@@ -146,7 +186,15 @@ public class ZoneManager {
 
     // Getters
     public boolean isEnabled() {
-        return enabled;
+        return enabled || usingWorldGuardRegions;
+    }
+
+    public boolean isUsingWorldGuardRegions() {
+        return usingWorldGuardRegions;
+    }
+
+    public WorldGuardIntegration getWorldGuardIntegration() {
+        return worldGuardIntegration;
     }
 
     public double getCenterX() {

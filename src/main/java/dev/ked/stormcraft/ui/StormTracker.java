@@ -80,7 +80,7 @@ public class StormTracker extends BukkitRunnable {
 
     private void runSingleStormTracking() {
         Location stormLocation = activeStorm.getCurrentLocation();
-        double damageRadius = activeStorm.getDamageRadius();
+        double damageRadius = activeStorm.getCurrentRadius();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             // Skip if player not in enabled world
@@ -145,7 +145,7 @@ public class StormTracker extends BukkitRunnable {
             TravelingStorm closestStorm = sortedStorms.get(0);
             Location stormLocation = closestStorm.getCurrentLocation();
             double distanceToCenter = playerLoc.distance(stormLocation);
-            double damageRadius = closestStorm.getDamageRadius();
+            double damageRadius = closestStorm.getCurrentRadius();
 
             // Calculate distance to edge (0 if inside storm)
             double distanceToEdge = Math.max(0, distanceToCenter - damageRadius);
@@ -175,10 +175,10 @@ public class StormTracker extends BukkitRunnable {
 
             // Calculate distance to edge (0 if inside storm)
             double distToCenter1 = player.getLocation().distance(loc1);
-            double distToEdge1 = Math.max(0, distToCenter1 - s1.getDamageRadius());
+            double distToEdge1 = Math.max(0, distToCenter1 - s1.getCurrentRadius());
 
             double distToCenter2 = player.getLocation().distance(loc2);
-            double distToEdge2 = Math.max(0, distToCenter2 - s2.getDamageRadius());
+            double distToEdge2 = Math.max(0, distToCenter2 - s2.getCurrentRadius());
 
             return Double.compare(distToEdge1, distToEdge2);
         });
@@ -200,7 +200,7 @@ public class StormTracker extends BukkitRunnable {
      */
     private void updatePlayerStormDisplay(Player player, TravelingStorm storm, double distanceToEdge) {
         Location stormLoc = storm.getCurrentLocation();
-        double damageRadius = storm.getDamageRadius();
+        double damageRadius = storm.getCurrentRadius();
 
         // Set player weather to rain if inside storm
         boolean isInStorm = distanceToEdge == 0;
@@ -227,6 +227,7 @@ public class StormTracker extends BukkitRunnable {
 
     /**
      * Shows storm info on player's ActionBar.
+     * Gets exposure/immunity status from DamageTask if available.
      */
     private void showActionBar(Player player, String direction, double distance, double damageRadius) {
         // Show current zone instead of storm info
@@ -254,6 +255,14 @@ public class StormTracker extends BukkitRunnable {
                 return;
         }
 
+        // Add exposure/immunity status below if in storm
+        if (plugin.getStormManager() != null && plugin.getStormManager().getDamageTask() != null) {
+            Component stormStatus = plugin.getStormManager().getDamageTask().getStormStatusForPlayer(player);
+            if (stormStatus != null) {
+                message = message.append(Component.text(" | ")).append(stormStatus);
+            }
+        }
+
         player.sendActionBar(message);
     }
 
@@ -278,7 +287,7 @@ public class StormTracker extends BukkitRunnable {
 
         Location playerLoc = player.getLocation();
         Location stormLoc = storm.getCurrentLocation();
-        double damageRadius = storm.getDamageRadius();
+        double damageRadius = storm.getCurrentRadius();
 
         // Update boss bar content
         Component title;
@@ -286,8 +295,8 @@ public class StormTracker extends BukkitRunnable {
         float progress;
 
         if (distanceToEdge == 0) {
-            // IN STORM - show escape direction
-            String escapeDirection = getEscapeDirection(player, storm);
+            // IN STORM - show escape direction relative to player facing
+            String escapeDirection = getEscapeDirectionRelative(player, storm);
 
             title = Component.text("⚡ ", NamedTextColor.RED, TextDecoration.BOLD)
                     .append(Component.text("ACTIVE STORM", NamedTextColor.RED, TextDecoration.BOLD))
@@ -296,8 +305,8 @@ public class StormTracker extends BukkitRunnable {
             color = BossBar.Color.RED;
             progress = 1.0f;
         } else {
-            // Show approaching storm (distance to edge)
-            String direction = getDirection(playerLoc, stormLoc);
+            // Show approaching storm relative to player facing
+            String direction = getDirectionRelative(player, stormLoc);
             int distanceBlocks = (int) distanceToEdge;
 
             title = Component.text("⛈ ", NamedTextColor.YELLOW)
@@ -424,6 +433,87 @@ public class StormTracker extends BukkitRunnable {
         int index = (int) Math.round(angle / 45.0) % 8;
         String[] arrows = {"↑", "↗", "→", "↘", "↓", "↙", "←", "↖"};
         return arrows[index] + " " + DIRECTIONS[index];
+    }
+
+    /**
+     * Gets the escape direction relative to player's facing direction.
+     * When facing the escape direction, arrow points up. When facing opposite, arrow points down.
+     */
+    private String getEscapeDirectionRelative(Player player, TravelingStorm storm) {
+        Location playerLoc = player.getLocation();
+        Location stormLoc = storm.getCurrentLocation();
+
+        // Calculate direction from storm center to player (away from storm)
+        double dx = playerLoc.getX() - stormLoc.getX();
+        double dz = playerLoc.getZ() - stormLoc.getZ();
+
+        // Get storm's current target waypoint to determine movement direction
+        Location targetLoc = storm.getTargetLocation();
+        double stormDx = targetLoc.getX() - stormLoc.getX();
+        double stormDz = targetLoc.getZ() - stormLoc.getZ();
+
+        // Normalize storm movement vector
+        double stormDistance = Math.sqrt(stormDx * stormDx + stormDz * stormDz);
+        if (stormDistance > 0) {
+            stormDx /= stormDistance;
+            stormDz /= stormDistance;
+        }
+
+        // Calculate dot product to see if storm is moving toward player
+        double dotProduct = (stormDx * dx) + (stormDz * dz);
+
+        // Player run speed ~5.6 blocks/s (walking), sprint ~7.0 blocks/s
+        double playerSpeed = 7.0;
+        double stormSpeed = storm.getMovementSpeed();
+
+        // If storm is chasing faster than player can run, flip the direction
+        if (dotProduct > 0 && stormSpeed > playerSpeed) {
+            // Storm catching up - run opposite direction (toward storm center, then through it)
+            dx = -dx;
+            dz = -dz;
+        }
+
+        // Convert to relative direction based on player's yaw
+        return getRelativeDirectionWithArrow(player, dx, dz);
+    }
+
+    /**
+     * Gets storm direction relative to player's facing direction.
+     */
+    private String getDirectionRelative(Player player, Location targetLocation) {
+        double dx = targetLocation.getX() - player.getLocation().getX();
+        double dz = targetLocation.getZ() - player.getLocation().getZ();
+        return getRelativeDirectionWithArrow(player, dx, dz);
+    }
+
+    /**
+     * Converts world direction (dx, dz) to a direction relative to player's facing.
+     * Returns arrow that points up when player faces the target, down when facing away.
+     */
+    private String getRelativeDirectionWithArrow(Player player, double dx, double dz) {
+        // Calculate absolute world angle to target
+        double targetAngle = Math.toDegrees(Math.atan2(dz, dx));
+        targetAngle = (targetAngle + 90) % 360; // Adjust so North = 0
+        if (targetAngle < 0) targetAngle += 360;
+
+        // Get player's facing direction (yaw)
+        float yaw = player.getLocation().getYaw();
+        // Normalize yaw to 0-360 (yaw is -180 to 180, 0 = South)
+        double playerAngle = ((yaw + 180) % 360);
+        if (playerAngle < 0) playerAngle += 360;
+
+        // Calculate relative angle (difference between target and player facing)
+        double relativeAngle = targetAngle - playerAngle;
+        if (relativeAngle < 0) relativeAngle += 360;
+
+        // Convert to 8-direction arrow
+        int index = (int) Math.round(relativeAngle / 45.0) % 8;
+        String[] arrows = {"↑", "↗", "→", "↘", "↓", "↙", "←", "↖"};
+
+        // Also show cardinal direction for reference
+        int cardinalIndex = (int) Math.round(targetAngle / 45.0) % 8;
+
+        return arrows[index] + " " + DIRECTIONS[cardinalIndex];
     }
 
     /**

@@ -91,10 +91,10 @@ public class StormsCommand implements CommandExecutor {
 
                 // Calculate distance to edge (0 if inside storm)
                 double distToCenter1 = player.getLocation().distance(loc1);
-                double distToEdge1 = Math.max(0, distToCenter1 - s1.getDamageRadius());
+                double distToEdge1 = Math.max(0, distToCenter1 - s1.getCurrentRadius());
 
                 double distToCenter2 = player.getLocation().distance(loc2);
-                double distToEdge2 = Math.max(0, distToCenter2 - s2.getDamageRadius());
+                double distToEdge2 = Math.max(0, distToCenter2 - s2.getCurrentRadius());
 
                 return Double.compare(distToEdge1, distToEdge2);
             });
@@ -119,18 +119,21 @@ public class StormsCommand implements CommandExecutor {
             Component.text("#" + number + " ", NamedTextColor.DARK_GRAY) :
             Component.empty();
 
-        // Calculate storm size category based on radius
-        String sizeCategory = getStormSizeCategory(storm.getDamageRadius());
+        // Calculate storm size category based on current radius
+        String sizeCategory = getStormSizeCategory(storm.getCurrentRadius());
 
         Component message = prefix
                 .append(Component.text("⛈ ", NamedTextColor.YELLOW))
                 .append(Component.text(sizeCategory, NamedTextColor.WHITE))
                 .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(storm.getCurrentPhase().getSymbol() + " ", getPhaseColor(storm.getCurrentPhase())))
+                .append(Component.text(storm.getCurrentPhase().getDisplayName(), getPhaseColor(storm.getCurrentPhase())))
+                .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
                 .append(Component.text("Time: ", NamedTextColor.GRAY))
                 .append(Component.text(formatTime(storm.getRemainingSeconds()), NamedTextColor.YELLOW))
                 .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
                 .append(Component.text("Damage: ", NamedTextColor.GRAY))
-                .append(Component.text(String.format("%.1f HP/s", storm.getCurrentDamagePerSecond()), NamedTextColor.RED));
+                .append(Component.text(String.format("%.1f HP/s (%.0f%%)", storm.getCurrentDamagePerSecond(), storm.getPhaseMultiplier() * 100), NamedTextColor.RED));
 
         // Add location info
         Location loc = storm.getCurrentLocation();
@@ -142,7 +145,7 @@ public class StormsCommand implements CommandExecutor {
         if (sender instanceof Player player) {
             if (loc.getWorld().equals(player.getWorld())) {
                 double distanceToCenter = player.getLocation().distance(loc);
-                double damageRadius = storm.getDamageRadius();
+                double damageRadius = storm.getCurrentRadius();
                 double distanceToEdge = Math.max(0, distanceToCenter - damageRadius);
 
                 message = message.append(Component.text(" | ", NamedTextColor.DARK_GRAY));
@@ -215,6 +218,14 @@ public class StormsCommand implements CommandExecutor {
             case "MEDIUM" -> "Medium";
             case "LONG_DANGEROUS" -> "Long Dangerous";
             default -> type;
+        };
+    }
+
+    private NamedTextColor getPhaseColor(dev.ked.stormcraft.model.StormPhase phase) {
+        return switch (phase) {
+            case FORMING -> NamedTextColor.GRAY;
+            case PEAK -> NamedTextColor.RED;
+            case DISSIPATING -> NamedTextColor.DARK_GRAY;
         };
     }
 

@@ -12,6 +12,10 @@ Stormcraft adds dynamic weather events that pose a real threat to players. Seek 
 - **Countdown Warnings** - Configurable countdown before storm arrival
 - **Storm Types** - Three severity levels: Weak, Medium, Dangerous
 - **Weighted Randomization** - Control storm frequency by type
+- **Storm Phases** - Dynamic lifecycle with FORMING, PEAK, and DISSIPATING phases
+  - Damage scales throughout storm lifetime (ramp up → peak → ramp down)
+  - Phase change warnings notify nearby players
+  - Configurable phase durations (default: 30% forming, 50% peak, 20% dissipating)
 - **Exposure Damage** - Players take damage when exposed to sky during storms
 - **Potion Effects** - Blindness, slowness during storms
 - **Lightning Strikes** - Chance-based lightning near exposed players
@@ -59,11 +63,15 @@ Transform your world with three risk/reward zones:
   - Fast-moving weak storms (pass in ~2 minutes)
   - Slow-moving medium storms (pass in 2-5 minutes)
   - Very slow dangerous storms (pass in 4-30 minutes!)
-- **Damage ramp-up** - Storms build from 0 to full damage over 60 seconds
+- **Storm Phases** - Each storm progresses through 3-phase lifecycle
+  - §7⬆ FORMING (30%): Damage ramps 0% → 100%
+  - §c⚡ PEAK (50%): Full damage sustained
+  - §7⬇ DISSIPATING (20%): Damage ramps 100% → 0%
+  - Phase changes announced to players inside storm radius
+  - 30-second warnings before phase transitions
+- **Variable storm sizes** - Radius scales with storm type (300-3900 blocks)
 - Storms move toward Stormlands center
-- Visible damage radius on map
 - **ActionBar/BossBar storm tracker** shows closest storm distance and direction
-- Real-time tracking on Dynmap, squaremap, and BlueMap
 - Use `/storm` to check closest storm, `/storms` to list all
 
 #### **Block Damage System**
@@ -87,28 +95,31 @@ Transform your world with three risk/reward zones:
 - Respects Y-levels for deepslate variants
 
 ### Integrations
+
+#### **WorldGuard** (Zone System)
+- **Automatic region detection** - Detects regions named `stormlands`, `stormzone`, `safezone`
+- **Priority over circular zones** - WorldGuard regions take precedence if found
+- **Storm spawning** - Storms spawn within stormzone and stormlands regions
+- **Region boundaries** - Storm behavior respects WorldGuard region shapes
+- **Protection flag** - Use `stormcraft-protect` flag to disable storm damage in specific regions
+- **Fallback support** - Falls back to circular zones if WorldGuard not found
+
+#### **Other Integrations**
 - **PlaceholderAPI** - Display storm status in other plugins
-- **WorldGuard** - Respect protected regions
 - **Stormcraft-Essence** - Essence economy and abilities (optional)
-- **Dynmap** - Visualize zones and storms on web map
-- **squaremap** - Modern map visualization support
-- **BlueMap** - 3D web map visualization
 
 ---
 
 ## 📦 Installation
 
 1. **Requirements:**
-   - Paper/Spigot 1.21.3+
-   - Java 17+
+   - Paper/Spigot 1.21.3 - 1.21.9
+   - Java 21+
 
 2. **Optional Dependencies:**
    - **Stormcraft-Essence** (for essence economy and abilities)
    - PlaceholderAPI (for placeholders)
-   - WorldGuard (for region protection)
-   - Dynmap (for map visualization)
-   - squaremap (for modern map visualization)
-   - BlueMap (for 3D map visualization)
+   - WorldGuard (for region protection and zone system)
 
 3. **Install:**
    - Place `stormcraft-0.1.0.jar` in your `plugins` folder
@@ -184,9 +195,25 @@ damageProfiles:
 
 ### Zone System Setup
 
+**WorldGuard Regions (Recommended)**
+
+Stormcraft automatically detects and uses WorldGuard regions with these exact names:
+- `stormlands` - High risk, high reward center zone
+- `stormzone` - Moderate risk/reward middle area
+- `safezone` - Low risk outer area
+
+Simply create these three WorldGuard regions in your world and Stormcraft will:
+- Spawn storms within `stormzone` and `stormlands` regions
+- Apply zone-specific damage multipliers and settings
+- Respect region boundaries for storm behavior
+
+**Circular Zones (Fallback)**
+
+If WorldGuard regions are not found, you can use circular zones:
+
 ```yaml
 zones:
-  enabled: false  # Set to true to enable
+  enabled: true   # Only used if WorldGuard regions not found
   centerX: 0      # Center of your Stormlands
   centerZ: 0
 
@@ -241,6 +268,14 @@ travelingStorms:
   damageRampUp:
     enabled: true
     rampUpSeconds: 60      # 1 minute to reach full damage
+
+# Storm phases - storms transition through lifecycle stages
+stormPhases:
+  enabled: true
+  formingPercent: 0.30    # First 30% of storm lifetime - damage ramps up
+  peakPercent: 0.50       # Middle 50% of storm lifetime - full damage
+  dissipatingPercent: 0.20  # Final 20% of storm lifetime - damage ramps down
+  phaseChangeWarningSeconds: 30  # Warn players 30 seconds before phase change
 
 # Storm Tracker UI (for traveling storms)
 stormTracker:
@@ -401,41 +436,6 @@ With 1000 block range and 50 block damage radius:
 
 ---
 
-## 🗺️ Map Integration Setup
-
-Stormcraft supports **Dynmap**, **squaremap**, and **BlueMap** for visualizing zones and active storms.
-
-### Setup (All Maps)
-
-1. **Install your preferred map plugin:**
-   - [Dynmap](https://www.spigotmc.org/resources/dynmap.274/) (SpigotMC)
-   - [squaremap](https://github.com/jpenilla/squaremap) (GitHub)
-   - [BlueMap](https://www.spigotmc.org/resources/bluemap.83557/) (SpigotMC)
-
-2. **Enable zones** in Stormcraft config:
-   ```yaml
-   zones:
-     enabled: true
-   ```
-
-3. **Restart server**
-
-4. **Access your map** (default ports):
-   - Dynmap: `http://your-server:8123`
-   - squaremap: `http://your-server:8080`
-
-### What You'll See
-
-**All maps show:**
-- 🔴 Red circle = Stormlands (high danger)
-- 🟠 Orange circle = Storm Zone
-- 🟢 Green circle = Safe Zone
-- 🟣 Purple markers = Active storm locations with damage radius
-
-**Multiple Storms:**
-When using erratic spawning, you'll see up to 6 simultaneous storms on the map, each with their own damage radius circles.
-
----
 
 ## 🌍 Custom World Generation
 
@@ -517,7 +517,6 @@ Reach center (0,0) → Highest peaks, deadliest storms, best loot
 - **Cannot modify existing worlds** - Only works for NEW world creation
 - **Reuses existing storm spawn weights** - Biome preferences from config apply
 - **Loot scales naturally** - Vanilla structures have better loot in dangerous zones (see below)
-- **Map integrations work** - Dynmap/squaremap show zone boundaries perfectly
 
 ---
 
@@ -614,12 +613,10 @@ Output: `target/stormcraft-0.1.0.jar`
 - Ensure `ignoreIfUnderBlocksMinDepth: 1` is correct
 - Check WorldGuard regions aren't interfering
 
-**Zones not appearing on map:**
-- Verify your map plugin (Dynmap/squaremap) is installed
-- Check `zones.enabled: true`
+**Zone system issues:**
+- Check `zones.enabled: true` or verify WorldGuard regions are set up
 - Restart server after config changes
-- Check console for map integration initialization messages
-- Try both map plugins - at least one should work!
+- Check console for zone initialization messages
 
 **Storms not starting:**
 - Check enabled worlds list
@@ -661,7 +658,7 @@ limitations under the License.
 
 **Version:** 0.1.0
 
-**Minecraft Version:** 1.21.3+
+**Minecraft Version:** 1.21.3 - 1.21.9
 
 **API:** Paper/Spigot
 
@@ -681,7 +678,6 @@ limitations under the License.
 - ✅ Multiple simultaneous storms (erratic spawning)
 - ✅ Damage ramp-up system
 - ✅ Border-based storm spawning
-- ✅ squaremap + BlueMap support
 - ✅ Variable storm movement speeds
 - ✅ Multi-storm tracking UI
 

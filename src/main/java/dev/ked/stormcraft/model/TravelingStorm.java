@@ -15,6 +15,12 @@ public class TravelingStorm {
     private final double damageRadius; // Radius in blocks
     private final int rampUpSeconds; // Time to reach full damage
 
+    // Storm phases
+    private final boolean phasesEnabled;
+    private final double formingPercent;
+    private final double peakPercent;
+    private final double dissipatingPercent;
+
     private Location currentLocation;
     private List<Location> waypoints; // Path waypoints
     private int currentWaypointIndex; // Current target waypoint
@@ -27,7 +33,8 @@ public class TravelingStorm {
 
     public TravelingStorm(StormProfile profile, int durationSeconds, double actualDamagePerSecond,
                          Location spawnLocation, List<Location> waypoints, double movementSpeed,
-                         double damageRadius, int rampUpSeconds) {
+                         double damageRadius, int rampUpSeconds,
+                         boolean phasesEnabled, double formingPercent, double peakPercent, double dissipatingPercent) {
         this.profile = profile;
         this.startTimeMillis = System.currentTimeMillis();
         this.originalDurationSeconds = durationSeconds;
@@ -39,6 +46,10 @@ public class TravelingStorm {
         this.waypoints = waypoints;
         this.currentWaypointIndex = 0;
         this.movementSpeed = movementSpeed;
+        this.phasesEnabled = phasesEnabled;
+        this.formingPercent = formingPercent;
+        this.peakPercent = peakPercent;
+        this.dissipatingPercent = dissipatingPercent;
     }
 
     // Legacy constructor for backward compatibility
@@ -46,7 +57,8 @@ public class TravelingStorm {
                          Location spawnLocation, Location targetLocation, double movementSpeed,
                          double damageRadius, int rampUpSeconds) {
         this(profile, durationSeconds, actualDamagePerSecond, spawnLocation,
-             List.of(targetLocation), movementSpeed, damageRadius, rampUpSeconds);
+             List.of(targetLocation), movementSpeed, damageRadius, rampUpSeconds,
+             false, 0.30, 0.50, 0.20); // Phases disabled for legacy
     }
 
     /**
@@ -150,29 +162,119 @@ public class TravelingStorm {
     }
 
     /**
-     * Gets the current damage per second with ramp-up applied.
-     * Damage starts at 0 and increases to full over first 10% of storm life.
+     * Gets the current storm phase based on elapsed time.
      */
-    public double getCurrentDamagePerSecond() {
-        if (rampUpSeconds <= 0) {
-            return actualDamagePerSecond;
+    public StormPhase getCurrentPhase() {
+        if (!phasesEnabled) {
+            return StormPhase.PEAK; // No phases = always peak
         }
 
         int elapsedSeconds = originalDurationSeconds - remainingSeconds;
-        int rampDuration = (int) (originalDurationSeconds * 0.1); // 10% of storm's total duration
+        double progress = (double) elapsedSeconds / originalDurationSeconds;
 
-        if (elapsedSeconds >= rampDuration) {
-            return actualDamagePerSecond; // Full damage
+        if (progress < formingPercent) {
+            return StormPhase.FORMING;
+        } else if (progress < formingPercent + peakPercent) {
+            return StormPhase.PEAK;
+        } else {
+            return StormPhase.DISSIPATING;
+        }
+    }
+
+    /**
+     * Gets the damage multiplier for the current phase.
+     * FORMING: 0% → 100% over duration
+     * PEAK: 100%
+     * DISSIPATING: 100% → 0% over duration
+     */
+    public double getPhaseMultiplier() {
+        if (!phasesEnabled) {
+            return 1.0;
         }
 
-        // Prevent division by zero
-        if (rampDuration == 0) {
-            return actualDamagePerSecond;
+        StormPhase phase = getCurrentPhase();
+        int elapsedSeconds = originalDurationSeconds - remainingSeconds;
+        double progress = (double) elapsedSeconds / originalDurationSeconds;
+
+        switch (phase) {
+            case FORMING:
+                // Ramp up: 0% → 100% over FORMING phase
+                double formingProgress = progress / formingPercent;
+                return formingProgress;
+
+            case PEAK:
+                // Full damage
+                return 1.0;
+
+            case DISSIPATING:
+                // Ramp down: 100% → 0% over DISSIPATING phase
+                double dissipatingStart = formingPercent + peakPercent;
+                double dissipatingProgress = (progress - dissipatingStart) / dissipatingPercent;
+                return 1.0 - dissipatingProgress;
+
+            default:
+                return 1.0;
+        }
+    }
+
+    /**
+     * Gets the current damage per second with phase-based scaling applied.
+     * Damage scales based on storm lifecycle phase.
+     */
+    public double getCurrentDamagePerSecond() {
+        return actualDamagePerSecond * getPhaseMultiplier();
+    }
+
+    /**
+     * Gets the radius multiplier for the current phase.
+     * Storm starts small, grows to full size, then shrinks at the end.
+     * FORMING: 20% → 100% over duration
+     * PEAK: 100%
+     * DISSIPATING: 100% (early) → 50% (late)
+     */
+    public double getRadiusMultiplier() {
+        if (!phasesEnabled) {
+            return 1.0; // No phases = always full size
         }
 
-        // Linear ramp: 0 → actualDamagePerSecond over first 10% of life
-        double rampProgress = (double) elapsedSeconds / rampDuration;
-        return actualDamagePerSecond * rampProgress;
+        StormPhase phase = getCurrentPhase();
+        int elapsedSeconds = originalDurationSeconds - remainingSeconds;
+        double progress = (double) elapsedSeconds / originalDurationSeconds;
+
+        switch (phase) {
+            case FORMING:
+                // Grow from 20% to 100% over FORMING phase
+                double formingProgress = progress / formingPercent;
+                return 0.2 + (0.8 * formingProgress); // 20% → 100%
+
+            case PEAK:
+                // Full size throughout PEAK phase
+                return 1.0;
+
+            case DISSIPATING:
+                // Stay full size for first 50% of dissipating, then shrink to 50%
+                double dissipatingStart = formingPercent + peakPercent;
+                double dissipatingProgress = (progress - dissipatingStart) / dissipatingPercent;
+
+                if (dissipatingProgress < 0.5) {
+                    return 1.0; // First half of dissipating = full size
+                } else {
+                    // Second half: shrink from 100% to 50%
+                    double shrinkProgress = (dissipatingProgress - 0.5) / 0.5;
+                    return 1.0 - (0.5 * shrinkProgress); // 100% → 50%
+                }
+
+            default:
+                return 1.0;
+        }
+    }
+
+    /**
+     * Gets the current effective radius based on phase.
+     * The radius grows as the storm forms and shrinks as it dissipates.
+     */
+    public double getCurrentRadius() {
+        return damageRadius * getRadiusMultiplier();
     }
 
     public Location getCurrentLocation() {

@@ -38,6 +38,8 @@ public class ConfigManager {
     private Set<GameMode> ignoreGameModes;
     private int ignoreIfUnderBlocksMinDepth;
     private boolean worldGuardProtection;
+    private double stormGracePeriodSeconds;
+    private double exposureCooldownSeconds;
 
     private boolean logExposureSamples;
     private boolean logScheduling;
@@ -196,6 +198,8 @@ public class ConfigManager {
             treatLeavesAsCover = exposureSection.getBoolean("treatLeavesAsCover", true);
             treatGlassAsCover = exposureSection.getBoolean("treatGlassAsCover", true);
             ignoreIfUnderBlocksMinDepth = exposureSection.getInt("ignoreIfUnderBlocksMinDepth", 1);
+            stormGracePeriodSeconds = exposureSection.getDouble("gracePeriodSeconds", 15.0);
+            exposureCooldownSeconds = exposureSection.getDouble("cooldownSeconds", 60.0);
 
             List<String> gameModeStrings = exposureSection.getStringList("ignoreGameModes");
             ignoreGameModes = new HashSet<>();
@@ -520,6 +524,8 @@ public class ConfigManager {
     public Set<GameMode> getIgnoreGameModes() { return ignoreGameModes; }
     public int getIgnoreIfUnderBlocksMinDepth() { return ignoreIfUnderBlocksMinDepth; }
     public boolean isWorldGuardProtection() { return worldGuardProtection; }
+    public double getStormGracePeriodSeconds() { return stormGracePeriodSeconds; }
+    public double getExposureCooldownSeconds() { return exposureCooldownSeconds; }
     public boolean isCustomWelcomeEnabled() { return config.getBoolean("customWelcome.enabled", true); }
     public boolean isLogExposureSamples() { return logExposureSamples; }
     public boolean isLogScheduling() { return logScheduling; }
@@ -579,6 +585,13 @@ public class ConfigManager {
     public String getStormTrackerMode() { return stormTrackerMode; }
     public double getStormTrackerRange() { return stormTrackerRange; }
     public int getStormTrackerUpdateInterval() { return stormTrackerUpdateInterval; }
+
+    // Storm phase settings
+    public boolean isStormPhasesEnabled() { return config.getBoolean("stormPhases.enabled", true); }
+    public double getFormingPercent() { return config.getDouble("stormPhases.formingPercent", 0.30); }
+    public double getPeakPercent() { return config.getDouble("stormPhases.peakPercent", 0.50); }
+    public double getDissipatingPercent() { return config.getDouble("stormPhases.dissipatingPercent", 0.20); }
+    public int getPhaseChangeWarningSeconds() { return config.getInt("stormPhases.phaseChangeWarningSeconds", 30); }
 
     // Performance settings
     public double getStormActiveRange() { return config.getDouble("performance.stormActiveRange", 2000.0); }

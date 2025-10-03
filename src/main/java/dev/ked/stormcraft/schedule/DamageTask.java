@@ -8,6 +8,7 @@ import dev.ked.stormcraft.config.ConfigManager;
 import dev.ked.stormcraft.exposure.PlayerExposureUtil;
 import dev.ked.stormcraft.integration.WorldGuardIntegration;
 import dev.ked.stormcraft.model.ActiveStorm;
+import dev.ked.stormcraft.model.PlayerStormExposure;
 import dev.ked.stormcraft.model.StormProfile;
 import dev.ked.stormcraft.model.TravelingStorm;
 import dev.ked.stormcraft.zones.ZoneManager;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 
 /**
  * Handles periodic exposure checks and damage application during active storms.
@@ -41,6 +43,9 @@ public class DamageTask extends BukkitRunnable {
     private ActiveStorm activeStorm;
     private TravelingStorm travelingStorm;
     private List<TravelingStorm> activeStorms = new ArrayList<>();
+
+    // Player exposure tracking
+    private final Map<UUID, PlayerStormExposure> playerExposure = new HashMap<>();
 
     // Performance optimization: track tick count for mob damage checks
     private int tickCounter = 0;
@@ -67,6 +72,73 @@ public class DamageTask extends BukkitRunnable {
         this.activeStorms = storms;
     }
 
+    /**
+     * Grants storm immunity to a player (e.g., after defeating a boss).
+     * @param player The player to grant immunity to
+     * @param durationSeconds Duration of immunity in seconds
+     * @param source Source of immunity (for display)
+     */
+    public void grantStormImmunity(Player player, int durationSeconds, String source) {
+        UUID playerId = player.getUniqueId();
+        PlayerStormExposure exposure = playerExposure.computeIfAbsent(playerId, PlayerStormExposure::new);
+        exposure.grantImmunity(durationSeconds, source);
+
+        player.sendMessage(net.kyori.adventure.text.Component.text(
+            "⛡ You have been granted " + durationSeconds + " seconds of storm immunity!",
+            net.kyori.adventure.text.format.NamedTextColor.GREEN));
+    }
+
+    /**
+     * Checks if a player has storm immunity.
+     */
+    public boolean hasStormImmunity(Player player) {
+        PlayerStormExposure exposure = playerExposure.get(player.getUniqueId());
+        return exposure != null && exposure.hasImmunity();
+    }
+
+    /**
+     * Clears all exposure data for a player (used on quit/death).
+     */
+    public void clearPlayerExposure(UUID playerId) {
+        playerExposure.remove(playerId);
+    }
+
+    /**
+     * Gets the storm status component for a player (immunity or exposure).
+     * Returns null if player has no special status.
+     */
+    public net.kyori.adventure.text.Component getStormStatusForPlayer(Player player) {
+        UUID playerId = player.getUniqueId();
+        PlayerStormExposure exposure = playerExposure.get(playerId);
+
+        if (exposure == null) {
+            return null;
+        }
+
+        // Show immunity status if active
+        if (exposure.hasImmunity()) {
+            return net.kyori.adventure.text.Component.text(
+                "⛡ Immunity: " + exposure.getRemainingImmunitySeconds() + "s",
+                net.kyori.adventure.text.format.NamedTextColor.GREEN);
+        }
+
+        // Show exposure status during grace period ramp-up
+        if (exposure.isInStorm()) {
+            double gracePeriodSeconds = config.getStormGracePeriodSeconds();
+            double damageMultiplier = exposure.getDamageMultiplier(gracePeriodSeconds);
+
+            if (damageMultiplier < 1.0) {
+                int percentage = (int)(damageMultiplier * 100);
+                return net.kyori.adventure.text.Component.text(
+                    "⚠ Exposure: " + percentage + "%",
+                    percentage < 50 ? net.kyori.adventure.text.format.NamedTextColor.YELLOW :
+                    net.kyori.adventure.text.format.NamedTextColor.GOLD);
+            }
+        }
+
+        return null;
+    }
+
     @Override
     public void run() {
         tickCounter++;
@@ -89,8 +161,28 @@ public class DamageTask extends BukkitRunnable {
 
         // Check all online players
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (isPlayerExposedToStorm(player)) {
+            boolean exposed = isPlayerExposedToStorm(player);
+
+            // Debug logging
+            if (config.isLogExposureSamples()) {
+                plugin.getLogger().info(String.format("Player %s: exposed=%s, world=%s, gamemode=%s",
+                    player.getName(), exposed, player.getWorld().getName(), player.getGameMode()));
+            }
+
+            if (exposed) {
                 exposedPlayers.add(player);
+
+                // Update exposure tracking
+                UUID playerId = player.getUniqueId();
+                PlayerStormExposure exposure = playerExposure.computeIfAbsent(playerId, PlayerStormExposure::new);
+                exposure.enterStorm();
+            } else {
+                // Player not in storm - update tracking if they were previously
+                UUID playerId = player.getUniqueId();
+                PlayerStormExposure exposure = playerExposure.get(playerId);
+                if (exposure != null && exposure.isInStorm()) {
+                    exposure.leaveStorm();
+                }
             }
         }
 
@@ -232,8 +324,8 @@ public class DamageTask extends BukkitRunnable {
     private boolean isPlayerExposedToMultiStorm(Player player, TravelingStorm storm) {
         Location playerLoc = player.getLocation();
 
-        // Check if player is within storm radius (use storm's actual radius)
-        if (!storm.isLocationInStorm(playerLoc, storm.getDamageRadius())) {
+        // Check if player is within storm radius (use storm's current radius)
+        if (!storm.isLocationInStorm(playerLoc, storm.getCurrentRadius())) {
             return false;
         }
 
@@ -265,8 +357,8 @@ public class DamageTask extends BukkitRunnable {
             return false;
         }
 
-        // Check if entity is within storm radius (use storm's actual radius)
-        if (!storm.isLocationInStorm(loc, storm.getDamageRadius())) {
+        // Check if entity is within storm radius (use storm's current radius)
+        if (!storm.isLocationInStorm(loc, storm.getCurrentRadius())) {
             return false;
         }
 
@@ -288,10 +380,10 @@ public class DamageTask extends BukkitRunnable {
      * Checks if a player is exposed to the storm, including WorldGuard region checks.
      */
     private boolean isPlayerExposedToStorm(Player player) {
-        // If using traveling storm, check if player is within storm's actual radius
+        // If using traveling storm, check if player is within storm's current radius
         if (travelingStorm != null && config.isTravelingStormsEnabled()) {
             Location playerLoc = player.getLocation();
-            if (!travelingStorm.isLocationInStorm(playerLoc, travelingStorm.getDamageRadius())) {
+            if (!travelingStorm.isLocationInStorm(playerLoc, travelingStorm.getCurrentRadius())) {
                 return false; // Player not in storm radius
             }
         }
@@ -323,9 +415,26 @@ public class DamageTask extends BukkitRunnable {
         }
 
         int checkInterval = config.getExposureCheckIntervalTicks();
+        double checkIntervalSeconds = checkInterval / 20.0;
 
-        // Calculate damage for this tick interval using the actual damage value
-        double damageAmount = actualDamagePerSecond * (checkInterval / 20.0);
+        // Get player exposure state
+        UUID playerId = player.getUniqueId();
+        PlayerStormExposure exposure = playerExposure.computeIfAbsent(playerId, PlayerStormExposure::new);
+
+        // Check for immunity
+        if (exposure.hasImmunity()) {
+            return; // No damage during immunity (status shown via StormTracker)
+        }
+
+        // Update accumulated exposure time
+        exposure.updateExposure(checkIntervalSeconds);
+
+        // Get grace period from config (default 15 seconds)
+        double gracePeriodSeconds = config.getStormGracePeriodSeconds();
+
+        // Calculate damage with grace period multiplier
+        double damageMultiplier = exposure.getDamageMultiplier(gracePeriodSeconds);
+        double damageAmount = actualDamagePerSecond * checkIntervalSeconds * damageMultiplier;
 
         // Fire exposure check event (allows other plugins to modify)
         StormcraftExposureCheckEvent exposureEvent = new StormcraftExposureCheckEvent(player, true, damageAmount);
@@ -339,8 +448,20 @@ public class DamageTask extends BukkitRunnable {
 
         // Apply damage
         if (damageAmount > 0) {
-            double newHealth = Math.max(0, player.getHealth() - damageAmount);
+            double currentHealth = player.getHealth();
+            double newHealth = Math.max(0, currentHealth - damageAmount);
+
+            // Debug logging
+            if (config.isLogExposureSamples()) {
+                plugin.getLogger().info(String.format("Damaging %s: %.2f damage (%.0f%% multiplier), %.1f -> %.1f health",
+                    player.getName(), damageAmount, damageMultiplier * 100, currentHealth, newHealth));
+            }
+
             player.setHealth(newHealth);
+            exposure.recordDamage();
+        } else if (config.isLogExposureSamples()) {
+            plugin.getLogger().info(String.format("No damage for %s: damageAmount=%.2f, multiplier=%.0f%%",
+                player.getName(), damageAmount, damageMultiplier * 100));
         }
 
         // Blindness effect removed - too disruptive for gameplay
@@ -370,9 +491,9 @@ public class DamageTask extends BukkitRunnable {
         }
 
         World world = stormLoc.getWorld();
-        // Use actual storm damage radius (or traveling storm radius if available)
+        // Use current storm damage radius (or traveling storm radius if available)
         double damageRadius = (travelingStorm != null) ?
-            travelingStorm.getDamageRadius() :
+            travelingStorm.getCurrentRadius() :
             config.getStormDamageRadius();
         double damageRadiusSquared = damageRadius * damageRadius;
 
@@ -415,7 +536,7 @@ public class DamageTask extends BukkitRunnable {
                     // Check entity against each storm in this world
                     for (TravelingStorm storm : worldStorms) {
                         Location stormLoc = storm.getCurrentLocation();
-                        double damageRadius = storm.getDamageRadius();
+                        double damageRadius = storm.getCurrentRadius();
                         double damageRadiusSquared = damageRadius * damageRadius;
 
                         // Only check if entity is within storm's actual damage radius
@@ -450,9 +571,9 @@ public class DamageTask extends BukkitRunnable {
             return false;
         }
 
-        // If using traveling storm, check if entity is within storm's actual radius
+        // If using traveling storm, check if entity is within storm's current radius
         if (travelingStorm != null && config.isTravelingStormsEnabled()) {
-            if (!travelingStorm.isLocationInStorm(loc, travelingStorm.getDamageRadius())) {
+            if (!travelingStorm.isLocationInStorm(loc, travelingStorm.getCurrentRadius())) {
                 return false; // Entity not in storm radius
             }
         }

@@ -64,6 +64,8 @@ exposure:
     - CREATIVE
     - SPECTATOR
   ignoreIfUnderBlocksMinDepth: 1
+  gracePeriodSeconds: 15.0  # Time before reaching full damage when entering storm
+  cooldownSeconds: 60.0  # Time after leaving storm before grace period resets
   protectedRegionsHook:
     worldGuard: true
 
@@ -210,6 +212,14 @@ stormTracker:
 customWelcome:
   enabled: true  # Set to false to disable custom welcome message
 
+# Storm phases - storms transition through lifecycle stages
+stormPhases:
+  enabled: true
+  formingPercent: 0.30    # First 30% of storm lifetime - damage ramps up
+  peakPercent: 0.50       # Middle 50% of storm lifetime - full damage
+  dissipatingPercent: 0.20  # Final 20% of storm lifetime - damage ramps down
+  phaseChangeWarningSeconds: 30  # Warn players 30 seconds before phase change
+
 # Performance optimization for traveling storms
 performance:
   stormActiveRange: 2000.0  # Distance in blocks - storms are "active" when players within this range
@@ -221,3 +231,26 @@ debug:
   logExposureSamples: false
   logScheduling: false
   bStats: true
+
+# Boss Arena Protection Zones
+# Players in these areas are protected from storm damage
+bossArenas:
+  # Example arena using WorldGuard region
+  example_arena:
+    worldGuardRegion: "boss_arena_1"  # WorldGuard region name
+    stormProtection: true  # Protect from storm damage
+    showWarnings: true  # Show "Protected Zone" message
+    description: "Dragon's Lair"
+
+  # Example arena using coordinate bounds
+  # coordinate_arena:
+  #   bounds:
+  #     world: "world"
+  #     minX: -100
+  #     minY: 50
+  #     minZ: -100
+  #     maxX: 100
+  #     maxY: 150
+  #     maxZ: 100
+  #   stormProtection: true
+  #   description: "Ancient Temple"

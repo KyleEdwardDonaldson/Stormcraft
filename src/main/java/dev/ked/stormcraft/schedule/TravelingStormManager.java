@@ -2,7 +2,6 @@ package dev.ked.stormcraft.schedule;
 
 import dev.ked.stormcraft.StormcraftPlugin;
 import dev.ked.stormcraft.config.ConfigManager;
-import dev.ked.stormcraft.integration.MapIntegrationManager;
 import dev.ked.stormcraft.model.StormProfile;
 import dev.ked.stormcraft.model.TravelingStorm;
 import dev.ked.stormcraft.zones.ZoneManager;
@@ -22,7 +21,6 @@ public class TravelingStormManager extends BukkitRunnable {
     private final StormcraftPlugin plugin;
     private final ConfigManager config;
     private final ZoneManager zoneManager;
-    private final MapIntegrationManager mapIntegrationManager;
     private final Random random = new Random();
 
     private TravelingStorm activeStorm;
@@ -32,12 +30,14 @@ public class TravelingStormManager extends BukkitRunnable {
     private int tickCounter = 0;
     private boolean wasActiveLastTick = false;
 
-    public TravelingStormManager(StormcraftPlugin plugin, ConfigManager config,
-                                ZoneManager zoneManager, MapIntegrationManager mapIntegrationManager) {
+    // Phase tracking for warnings
+    private dev.ked.stormcraft.model.StormPhase lastPhase = null;
+    private boolean sentPhaseWarning = false;
+
+    public TravelingStormManager(StormcraftPlugin plugin, ConfigManager config, ZoneManager zoneManager) {
         this.plugin = plugin;
         this.config = config;
         this.zoneManager = zoneManager;
-        this.mapIntegrationManager = mapIntegrationManager;
     }
 
     /**
@@ -72,6 +72,12 @@ public class TravelingStormManager extends BukkitRunnable {
         // Get ramp-up duration
         int rampUpSeconds = config.isDamageRampUpEnabled() ? config.getDamageRampUpSeconds() : 0;
 
+        // Get phase configuration
+        boolean phasesEnabled = config.isStormPhasesEnabled();
+        double formingPercent = config.getFormingPercent();
+        double peakPercent = config.getPeakPercent();
+        double dissipatingPercent = config.getDissipatingPercent();
+
         // Create traveling storm
         activeStorm = new TravelingStorm(
             profile,
@@ -81,7 +87,11 @@ public class TravelingStormManager extends BukkitRunnable {
             waypoints,
             actualSpeed,
             actualRadius,
-            rampUpSeconds
+            rampUpSeconds,
+            phasesEnabled,
+            formingPercent,
+            peakPercent,
+            dissipatingPercent
         );
 
         // Set initial remaining time (for simulating storms already in progress)
@@ -93,11 +103,6 @@ public class TravelingStormManager extends BukkitRunnable {
 
         // Start movement task (runs every second)
         this.runTaskTimer(plugin, 0L, 20L);
-
-        // Update map markers
-        if (mapIntegrationManager != null) {
-            mapIntegrationManager.updateStormMarker(activeStorm);
-        }
 
         if (config.isLogScheduling()) {
             plugin.getLogger().info("Traveling storm started at (" +
@@ -141,21 +146,134 @@ public class TravelingStormManager extends BukkitRunnable {
         // Decrement remaining time (by number of seconds elapsed)
         activeStorm.decrementRemaining(ticksPerUpdate);
 
+        // Check for phase changes and send warnings
+        checkPhaseChange();
+
         // Only move and update map if active or on dormant update interval
         if (isActive || tickCounter % (config.getDormantUpdateInterval() / 20) == 0) {
             // Move storm toward target
             activeStorm.move(ticksPerUpdate); // Move based on elapsed seconds
-
-            // Update map markers
-            if (mapIntegrationManager != null) {
-                mapIntegrationManager.updateStormMarker(activeStorm);
-            }
         }
 
         // Check if storm expired
         if (activeStorm.isExpired()) {
             endStorm();
         }
+    }
+
+    /**
+     * Checks for phase transitions and sends warnings to nearby players.
+     */
+    private void checkPhaseChange() {
+        if (activeStorm == null || !config.isStormPhasesEnabled()) {
+            return;
+        }
+
+        dev.ked.stormcraft.model.StormPhase currentPhase = activeStorm.getCurrentPhase();
+        int remainingSeconds = activeStorm.getRemainingSeconds();
+        int warningSeconds = config.getPhaseChangeWarningSeconds();
+
+        // Check if phase changed
+        if (lastPhase != currentPhase) {
+            lastPhase = currentPhase;
+            sentPhaseWarning = false;
+
+            // Announce phase change to nearby players
+            announcePhaseChange(currentPhase);
+        }
+
+        // Check if we need to send warning for upcoming phase change
+        if (!sentPhaseWarning) {
+            int elapsedSeconds = activeStorm.getOriginalDurationSeconds() - remainingSeconds;
+            double progress = (double) elapsedSeconds / activeStorm.getOriginalDurationSeconds();
+
+            double formingEnd = config.getFormingPercent();
+            double peakEnd = formingEnd + config.getPeakPercent();
+
+            // Calculate seconds until next phase
+            int secondsUntilNextPhase = -1;
+            if (currentPhase == dev.ked.stormcraft.model.StormPhase.FORMING) {
+                int formingEndSeconds = (int)(activeStorm.getOriginalDurationSeconds() * formingEnd);
+                secondsUntilNextPhase = formingEndSeconds - elapsedSeconds;
+            } else if (currentPhase == dev.ked.stormcraft.model.StormPhase.PEAK) {
+                int peakEndSeconds = (int)(activeStorm.getOriginalDurationSeconds() * peakEnd);
+                secondsUntilNextPhase = peakEndSeconds - elapsedSeconds;
+            }
+
+            // Send warning if within warning window
+            if (secondsUntilNextPhase > 0 && secondsUntilNextPhase <= warningSeconds) {
+                sendPhaseWarning(secondsUntilNextPhase);
+                sentPhaseWarning = true;
+            }
+        }
+    }
+
+    /**
+     * Announces a phase change to players near the storm.
+     */
+    private void announcePhaseChange(dev.ked.stormcraft.model.StormPhase newPhase) {
+        net.kyori.adventure.text.Component message = net.kyori.adventure.text.Component.text("⛈ Storm Phase: ", net.kyori.adventure.text.format.NamedTextColor.GRAY)
+                .append(net.kyori.adventure.text.Component.text(newPhase.getDisplayName(), getPhaseColor(newPhase)))
+                .append(net.kyori.adventure.text.Component.text(" " + newPhase.getSymbol()));
+
+        sendMessageToNearbyPlayers(message);
+    }
+
+    /**
+     * Sends a warning about upcoming phase change to nearby players.
+     */
+    private void sendPhaseWarning(int secondsUntil) {
+        dev.ked.stormcraft.model.StormPhase nextPhase = getNextPhase(activeStorm.getCurrentPhase());
+        if (nextPhase == null) return;
+
+        net.kyori.adventure.text.Component message = net.kyori.adventure.text.Component.text("⚠ Storm entering ", net.kyori.adventure.text.format.NamedTextColor.YELLOW)
+                .append(net.kyori.adventure.text.Component.text(nextPhase.getDisplayName(), getPhaseColor(nextPhase)))
+                .append(net.kyori.adventure.text.Component.text(" phase in " + secondsUntil + "s", net.kyori.adventure.text.format.NamedTextColor.YELLOW));
+
+        sendMessageToNearbyPlayers(message);
+    }
+
+    /**
+     * Sends a message to all players within the storm's radius.
+     */
+    private void sendMessageToNearbyPlayers(net.kyori.adventure.text.Component message) {
+        if (activeStorm == null) return;
+
+        org.bukkit.Location stormLoc = activeStorm.getCurrentLocation();
+        double radius = activeStorm.getCurrentRadius();
+        double radiusSquared = radius * radius;
+
+        org.bukkit.Bukkit.getOnlinePlayers().stream()
+            .filter(p -> p.getWorld().equals(stormLoc.getWorld()))
+            .filter(p -> {
+                org.bukkit.Location pLoc = p.getLocation();
+                double dx = pLoc.getX() - stormLoc.getX();
+                double dz = pLoc.getZ() - stormLoc.getZ();
+                return (dx * dx + dz * dz) <= radiusSquared;
+            })
+            .forEach(p -> p.sendMessage(message));
+    }
+
+    /**
+     * Gets the next phase in the storm lifecycle.
+     */
+    private dev.ked.stormcraft.model.StormPhase getNextPhase(dev.ked.stormcraft.model.StormPhase current) {
+        return switch (current) {
+            case FORMING -> dev.ked.stormcraft.model.StormPhase.PEAK;
+            case PEAK -> dev.ked.stormcraft.model.StormPhase.DISSIPATING;
+            case DISSIPATING -> null; // No next phase
+        };
+    }
+
+    /**
+     * Gets the color for a phase.
+     */
+    private net.kyori.adventure.text.format.NamedTextColor getPhaseColor(dev.ked.stormcraft.model.StormPhase phase) {
+        return switch (phase) {
+            case FORMING -> net.kyori.adventure.text.format.NamedTextColor.GRAY;
+            case PEAK -> net.kyori.adventure.text.format.NamedTextColor.RED;
+            case DISSIPATING -> net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY;
+        };
     }
 
     /**
@@ -193,11 +311,6 @@ public class TravelingStormManager extends BukkitRunnable {
             plugin.getLogger().info("Traveling storm ended at (" +
                                   (int)activeStorm.getCurrentLocation().getX() + ", " +
                                   (int)activeStorm.getCurrentLocation().getZ() + ")");
-        }
-
-        // Remove map markers
-        if (mapIntegrationManager != null) {
-            mapIntegrationManager.removeStormMarker();
         }
 
         activeStorm = null;
@@ -306,9 +419,32 @@ public class TravelingStormManager extends BukkitRunnable {
 
     /**
      * Gets a random spawn location for the storm.
-     * Spawns anywhere across the map with weighted distribution.
+     * If using WorldGuard regions, spawns in stormzone or stormlands.
+     * Otherwise uses circular zones with weighted distribution.
      */
     private Location getRandomSpawnLocation(World world) {
+        // Priority: Use WorldGuard regions if available
+        if (zoneManager.isUsingWorldGuardRegions()) {
+            // Try stormzone first (70% chance), then stormlands (30% chance)
+            String regionName = random.nextDouble() < 0.7 ? "stormzone" : "stormlands";
+            Location location = zoneManager.getWorldGuardIntegration().getRandomLocationInRegion(world, regionName, random);
+
+            if (location != null) {
+                return location;
+            }
+
+            // Fallback: try the other region
+            regionName = regionName.equals("stormzone") ? "stormlands" : "stormzone";
+            location = zoneManager.getWorldGuardIntegration().getRandomLocationInRegion(world, regionName, random);
+
+            if (location != null) {
+                return location;
+            }
+
+            plugin.getLogger().warning("Failed to get spawn location from WorldGuard regions, using fallback");
+        }
+
+        // Fallback: Circular zones
         if (!zoneManager.isEnabled()) {
             // Random location within 5000 blocks of spawn
             return getBestBiomeLocation(world, 0, 0, 0, 5000, null);
@@ -386,7 +522,7 @@ public class TravelingStormManager extends BukkitRunnable {
             return false;
         }
 
-        return activeStorm.isLocationInStorm(location, activeStorm.getDamageRadius());
+        return activeStorm.isLocationInStorm(location, activeStorm.getCurrentRadius());
     }
 
     public TravelingStorm getActiveStorm() {
